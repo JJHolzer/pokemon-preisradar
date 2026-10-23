@@ -621,22 +621,30 @@ async function storePhoto(file,oldKey){ const c=await fileToCanvas(file,900); co
 /* ================= Texterkennung ================= */
 const OCR={worker:null,abort:null};
 function loadScript(src){ return new Promise((res,rej)=>{ if([...document.scripts].some(s=>s.src===src)) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
-async function getWorker(onProg){
-  if(OCR.worker) return OCR.worker;
+async function getWorker(onProg, kind='text'){
+  const key=kind==='num'?'numWorker':'worker';
+  if(OCR[key]) return OCR[key];
   await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-  OCR.worker = await Tesseract.createWorker(['deu','eng'],1,{logger:m=>{ if(m.status==='recognizing text') return; onProg && onProg(m); }});
-  return OCR.worker;
+  const w=await Tesseract.createWorker(kind==='num'?['eng']:['deu','eng'],1,{logger:m=>{ if(m.status==='recognizing text') return; onProg && onProg(m); }});
+  if(kind==='num') await w.setParameters({tessedit_char_whitelist:'0123456789/ABCDEFGHIJKLMNOPQRSTUVWXYZ ',tessedit_pageseg_mode:'6'});
+  OCR[key]=w; return w;
 }
 function prep(canvas,x,y,w,h,scale=1){ const c=document.createElement('canvas'); c.width=Math.round(w*scale); c.height=Math.round(h*scale); const g=c.getContext('2d');
   g.drawImage(canvas,x,y,w,h,0,0,c.width,c.height); const d=g.getImageData(0,0,c.width,c.height), a=d.data;
   for(let i=0;i<a.length;i+=4){ let v=0.299*a[i]+0.587*a[i+1]+0.114*a[i+2]; v=(v-128)*1.5+128; v=v<0?0:v>255?255:v; a[i]=a[i+1]=a[i+2]=v; } g.putImageData(d,0,0); return c; }
 function parseNumber(text){
   const t=text.replace(/[Oo](?=\d)|(?<=\d)[Oo]/g,'0').replace(/[Il|](?=\d{2})/g,'1');
-  let m=t.match(/\b([A-Z]{2})\s?(\d{1,3})\s*\/\s*[A-Z]{2}\s?(\d{1,3})\b/); if(m) return {nr:m[1]+m[2].padStart(2,'0'), total:null, prefix:m[1]};
+  let m=t.match(/\b([A-Z]{2})\s?(\d{1,3})\s*\/\s*[A-Z]{2}\s?(\d{1,3})\b/); if(m) return {nr:m[1]+m[2].padStart(2,'0'), total:null};
   const all=[...t.matchAll(/(\d{1,3})\s*[\/⁄]\s*(\d{2,3})/g)].map(x=>({nr:String(parseInt(x[1],10)), total:parseInt(x[2],10)})).filter(x=>x.total>=10&&x.total<=400);
   if(all.length) return all[all.length-1];
   m=t.match(/\b(SVP|SWSH|SM|XY|BW)\s?(\d{1,3})\b/i); if(m) return {nr:m[1].toUpperCase()+String(m[2]).padStart(3,'0'), total:null};
-  return null;
+  // Schrägstrich oft als 7, 1 oder 4 gelesen: Ziffernfolge aufteilen, später gegen den Katalog prüfen
+  const alts=[];
+  for(const run of t.match(/\d{5,8}/g)||[]){
+    for(let i=1;i<=3;i++){ const sep=run[i]; if(!'7145'.includes(sep)) continue; const a=run.slice(0,i);
+      for(const len of [3,2]){ const b=run.slice(i+1,i+1+len); if(b.length!==len) continue; const total=parseInt(b,10), nr=parseInt(a,10);
+        if(total>=10&&total<=400&&nr>0) alts.push({nr:String(nr),total}); } } }
+  return alts.length?{alts}:null;
 }
 const STOP=new Set(['pokemon','trainer','energie','energy','basis','basic','phase','stage','item','unterstutzer','supporter','stadion','stadium','regel','rule','schwache','weakness','resistenz','resistance','ruckzug','retreat','attacke','game','freak','nintendo','creatures','illus','wenn','dein','deine','dieses','karte','preiskarten','kampfunfahig','gegner','schaden','mega','ex','gx','vmax','vstar','v']);
 let NAMEIDX=null;
@@ -647,35 +655,39 @@ function rankCandidates(topText, num, fullText=''){
   const idx=nameIndex(), name=new Map();
   const add=(txt,wt)=>{ for(const t of new Set(norm(txt).split(' '))){ if(t.length<4||STOP.has(t)) continue; const hit=idx.get(t); if(!hit) continue; for(const i of hit) name.set(i,(name.get(i)||0)+(10+t.length*3)*wt); } };
   add(topText,3); if(fullText) add(fullText,1);
+  const strict=!!num?.alts; const opts=num?(num.alts||[num]):[];
+  const nn=x=>String(x).toLowerCase().replace(/^0+(?=\d)/,'');
+  const byNr=new Map(); for(const o of opts){ const k=nn(o.nr); if(!byNr.has(k)) byNr.set(k,[]); byNr.get(k).push(o.total); }
   const run=useNum=>{
-    const want=useNum&&num?String(num.nr).toLowerCase().replace(/^0+(?=\d)/,''):null, sc=new Map(name);
-    if(want) CAT.rows.forEach((r,i)=>{ if(!isSingle(r)) return; const rn=String(r[F.nr]||'').toLowerCase().replace(/^0+(?=\d)/,''); if(rn&&rn===want&&!sc.has(i)) sc.set(i,0); });
+    const sc=new Map(name);
+    if(useNum&&byNr.size) CAT.rows.forEach((r,i)=>{ if(!isSingle(r)) return; const rn=nn(r[F.nr]||''); if(rn&&byNr.has(rn)&&!sc.has(i)) sc.set(i,0); });
     const out=[];
     for(const [i,ns] of sc){ const r=CAT.rows[i]; let s=ns;
-      if(want){ const rn=String(r[F.nr]||'').toLowerCase().replace(/^0+(?=\d)/,'');
-        if(rn===want){ s+=60; const set=pSetO(r); if(num.total&&set.c){ if(set.c===num.total) s+=50; else if(Math.abs(set.c-num.total)<=2) s+=15; } }
+      if(useNum&&byNr.size){ const rn=nn(r[F.nr]||''), tots=byNr.get(rn), c=pSetO(r).c;
+        if(tots){ const exact=tots.some(t=>t&&c&&t===c), near=tots.some(t=>t&&c&&Math.abs(t-c)<=2);
+          if(strict){ if(exact) s+=110; else if(ns<60) continue; }
+          else { s+=60; if(exact) s+=50; else if(near) s+=15; } }
         else if(ns<60) continue; }
       if(r[F.de]) s+=5; out.push([s,r]); }
     out.sort((a,b)=>b[0]-a[0]||((b[1][F.trend]||0)-(a[1][F.trend]||0)));
     return out; };
-  let out=run(true); if(num&&(!out.length||out[0][0]<70)) { const alt=run(false); if(alt.length) out=out.concat(alt.filter(x=>!out.some(y=>y[1]===x[1]))); }
+  let out=run(true); if(opts.length&&(!out.length||out[0][0]<70)){ const alt=run(false); out=out.concat(alt.filter(x=>!out.some(y=>y[1]===x[1]))); }
   return out.slice(0,24).map(x=>x[1]);
 }
 async function recognize(file, onStep){
   const c=await fileToCanvas(file,2400), W=c.width, H=c.height;
   onStep('Texterkennung wird geladen …',10);
-  const w=await getWorker(m=>{ if(m.progress!=null) onStep('Texterkennung wird geladen …',10+Math.round(m.progress*40)); });
+  const w=await getWorker(m=>{ if(m.progress!=null) onStep('Texterkennung wird geladen …',10+Math.round(m.progress*35)); });
+  const wn=await getWorker(null,'num');
   onStep('Name wird gelesen …',55);
   const top=await w.recognize(prep(c,0,0,W,Math.round(H*0.2),W<1000?1.6:1));
   onStep('Kartennummer wird gelesen …',70);
-  const sc=W<1000?4:W<1600?2.5:1.6; let numText='';
-  try{ await w.setParameters({tessedit_char_whitelist:'0123456789/ABCDEFGHIJKLMNOPQRSTUVWXYZ ',tessedit_pageseg_mode:'6'});
-    for(const [x0,y0,ww,hh] of [[0,0.88,0.55,0.12],[0.45,0.88,0.55,0.12],[0,0.80,1,0.2]]){
-      const r=await w.recognize(prep(c,Math.round(W*x0),Math.round(H*y0),Math.round(W*ww),Math.round(H*hh),sc)); numText+='\n'+r.data.text; if(parseNumber(numText)) break; }
-  } finally { await w.setParameters({tessedit_char_whitelist:'',tessedit_pageseg_mode:'3'}); }
-  let num=parseNumber(numText), text=top.data.text, fullText='';
-  const first=rankCandidates(text,num);
-  if(!num || !first.length){ onStep('Ganze Karte wird gelesen …',85); const full=await w.recognize(prep(c,0,0,W,H,W<1000?1.4:1)); fullText=full.data.text; if(!num) num=parseNumber(fullText); }
+  const sc=W<1000?4:W<1600?2.5:1.6; let numText='', num=null;
+  for(const [x0,y0,ww,hh] of [[0,0.88,0.55,0.12],[0.45,0.88,0.55,0.12],[0,0.80,1,0.2]]){
+    const r=await wn.recognize(prep(c,Math.round(W*x0),Math.round(H*y0),Math.round(W*ww),Math.round(H*hh),sc)); numText+='\n'+r.data.text;
+    num=parseNumber(numText); if(num&&!num.alts) break; }
+  let text=top.data.text, fullText='';
+  if(!num || !rankCandidates(text,num).length){ onStep('Ganze Karte wird gelesen …',85); const full=await w.recognize(prep(c,0,0,W,H,W<1000?1.4:1)); fullText=full.data.text; if(!num) num=parseNumber(fullText); }
   onStep('Abgleich mit dem Katalog …',96);
   return {text:[text,numText,fullText].join('\n'), num, cands:rankCandidates(text,num,fullText)};
 }
@@ -699,7 +711,8 @@ async function runPhoto(file){
   try{ res=await recognize(file,(t,p)=>{ if(cancelled) return; const s=$('a-step'),b=$('a-bar'); if(s) s.textContent=t; if(b) b.style.width=p+'%'; }); }
   catch(e){ if(!$('a-body')) return; body.innerHTML+=`<p class="down">Die Texterkennung hat nicht geklappt. Such die Karte stattdessen über den Namen.</p>`; showSearch('',file); return; }
   OCR.abort=null; if(cancelled||!$('a-body')) return;
-  const hint=res.num?`Erkannt: Nummer <b>${esc(res.num.nr)}${res.num.total?'/'+res.num.total:''}</b>`:'Keine Kartennummer erkannt';
+  const n0=res.num&&!res.num.alts?res.num:null, top0=res.cands[0];
+  const hint=n0?`Erkannt: Nummer <b>${esc(n0.nr)}${n0.total?'/'+n0.total:''}</b>`:(res.num?.alts&&top0?`Nummer vermutlich <b>${esc(top0[F.nr])}</b>`:'Keine Kartennummer erkannt');
   showCands(res.cands, file, `${hint}. Tippe auf die passende Karte.`, res.text);
 }
 function candHTML(r,sel){ return `<button type="button" class="cand" data-id="${r[F.id]}" aria-pressed="${sel===r[F.id]}"><div class="im">${cardImg(r,'low')}</div>
