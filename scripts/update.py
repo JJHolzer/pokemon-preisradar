@@ -183,25 +183,30 @@ def build_catalog(pg, singles, nonsingles, cards, tsets):
 
 # ---------------------------------------------------------------- Verlauf
 def update_history(state, catalog, date):
-    """Verlauf je Produkt: v = Trendpreis, l = Ab-Preis (günstigstes Angebot), jeweils in Cent."""
+    """Verlauf je Produkt in Cent: v = Trend, l = Ab-Preis (günstigstes Angebot),
+    m = Marktpreis (Ø 7 Tage Verkauf, ohne diesen Wert der Trend)."""
     hdir = os.path.join(state, 'history')
-    shards = collections.defaultdict(lambda: {'v': {}, 'l': {}})
+    shards = collections.defaultdict(lambda: {'v': {}, 'l': {}, 'm': {}})
     for r in catalog['rows']:
         sh = shards[r[0] % SHARDS]
         if r[8] is not None:
             sh['v'][str(r[0])] = int(round(r[8] * 100))
         if r[9] is not None:
             sh['l'][str(r[0])] = int(round(r[9] * 100))
+        mk = r[12] if r[12] is not None else r[8]
+        if mk is not None:
+            sh['m'][str(r[0])] = int(round(mk * 100))
     d = dt.date.fromisoformat(date)
     for s in range(SHARDS):
         path = os.path.join(hdir, f'{s}.json')
         h = load(path, None) or {'d0': date, 'v': {}}
         h.setdefault('l', {})
+        h.setdefault('m', {})
         d0 = dt.date.fromisoformat(h['d0'])
         idx = (d - d0).days
         if idx < 0:
             continue
-        for key in ('v', 'l'):
+        for key in ('v', 'l', 'm'):
             for pid, cents in shards[s][key].items():
                 arr = h[key].setdefault(pid, [])
                 if len(arr) < idx:
@@ -213,7 +218,7 @@ def update_history(state, catalog, date):
         if idx + 1 > KEEP_DAYS:
             cut = idx + 1 - KEEP_DAYS
             h['d0'] = (d0 + dt.timedelta(days=cut)).isoformat()
-            for key in ('v', 'l'):
+            for key in ('v', 'l', 'm'):
                 h[key] = {k: v[cut:] for k, v in h[key].items() if any(x is not None for x in v[cut:])}
         dump(path, h)
 

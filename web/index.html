@@ -263,7 +263,7 @@ footer{font-size:12.5px;color:var(--muted);max-width:80ch}
           <button type="button" data-o="value" aria-pressed="false">Nach Wert</button>
           <button type="button" data-o="set" aria-pressed="false">Nach Set</button>
         </div>
-        <div class="seg" role="group" aria-label="Preisbasis" id="m-basis"><button type="button" data-b="low">Günstigstes Angebot</button><button type="button" data-b="trend">Trend</button></div>
+        <div class="seg" role="group" aria-label="Preisbasis" id="m-basis"><button type="button" data-b="market">Marktpreis</button><button type="button" data-b="low">Günstigstes Angebot</button><button type="button" data-b="trend">Trend</button></div>
         <div class="pager"><button type="button" id="pg-prev" aria-label="Vorige Seite">‹</button><span class="num muted" id="pg-info">–</span><button type="button" id="pg-next" aria-label="Nächste Seite">›</button></div>
       </div>
       <div class="binder" id="binder"><div class="loading">Mappe wird geladen …</div></div>
@@ -328,7 +328,7 @@ Surging Sparks Booster Box;;;2;165;;Versiegelt</pre>
     </div>
   </section>
 
-  <footer>Preise: Cardmarket Price Guide, jeden Morgen neu abgerufen. Kartennamen, Nummern und Bilder: TCGdex. „Günstigstes Angebot“ ist der Ab-Preis von Cardmarket, täglich gegen 3 Uhr festgehalten, über alle Sprachen und Zustände. „Trend“ ist der gewichtete Durchschnitt der letzten Verkäufe. Die Kartenerkennung läuft direkt auf deinem Gerät, Fotos verlassen es nicht.</footer>
+  <footer>Preise: Cardmarket Price Guide, jeden Morgen neu abgerufen. Kartennamen, Nummern und Bilder: TCGdex. „Marktpreis“ ist der Durchschnitt der tatsächlichen Cardmarket-Verkäufe der letzten 7 Tage (bei Boxen und Displays der Trend). „Günstigstes Angebot“ ist der Ab-Preis. „Trend“ ist der von Cardmarket geglättete Verkaufswert. Alle Werte werden täglich gegen 3 Uhr festgehalten und gelten über alle Sprachen und Zustände. Die Kartenerkennung läuft direkt auf deinem Gerät, Fotos verlassen es nicht.</footer>
 </div>
 
 <button type="button" class="fab" id="fab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Karte einkleben</button>
@@ -375,9 +375,14 @@ function cardImg(r, q='low', photo=null){
   return ph+`<img class="ci" src="${u}" data-alt="${imgUrl(r,q,true)}" alt="${esc(pName(r))}" loading="lazy" onerror="imgFail(this)">`;
 }
 window.imgFail = el => { if(el.dataset.alt){ const a=el.dataset.alt; el.dataset.alt=''; el.src=a; } else el.remove(); };
-const isLow=()=>(ST.settings.basis||'low')==='low';
-const BASIS_LABEL=()=>isLow()?'Günstigstes Angebot':'Cardmarket-Trend';
-function priceOf(r,rh,low=isLow()){ if(low){ const lh=r[F.lh]; if(rh&&lh>0) return lh; return r[F.low]??r[F.trend]??0; } const th=r[F.th]; if(rh&&th>0) return th; return r[F.trend]??r[F.low]??0; }
+const basis=()=>ST.settings.basis||'market';
+const isLow=()=>basis()==='low';
+const BASIS_LABEL=r=>basis()==='low'?'Günstigstes Angebot':basis()==='trend'?'Cardmarket-Trend':(r&&!isSingle(r)?'Marktpreis (Trend, für Boxen gibt es keinen 7-Tage-Schnitt)':(r&&r[F.avg7]==null?'Marktpreis (Trend, keine Verkäufe in 7 Tagen)':'Marktpreis · Ø Verkauf letzte 7 Tage'));
+function priceOf(r,rh,b=basis()){
+  if(b==='low'){ const lh=r[F.lh]; if(rh&&lh>0) return lh; return r[F.low]??r[F.trend]??0; }
+  const th=r[F.th]; if(rh&&th>0) return th;
+  if(b==='market'&&isSingle(r)&&r[F.avg7]!=null) return r[F.avg7];
+  return r[F.trend]??r[F.low]??0; }
 function basePrice(r,rh){ return priceOf(r,rh); }
 
 async function loadCatalog(){
@@ -403,14 +408,14 @@ async function loadHistoryFor(ids){ const n=META?.shards||128; await Promise.all
 async function historyAsync(id){ const n=META?.shards||128; const h=await loadShard(id%n); return histFrom(h,id); }
 function histFrom(h,id){
   if(!h) return {dates:[],vals:[]};
-  const a=((isLow()?h.l:h.v)||{})[String(id)]||[]; const d0=new Date(h.d0+'T00:00:00Z'); const dates=[],vals=[];
+  const a=((basis()==='low'?h.l:basis()==='trend'?h.v:h.m)||{})[String(id)]||[]; const d0=new Date(h.d0+'T00:00:00Z'); const dates=[],vals=[];
   a.forEach((c,i)=>{ if(c==null) return; const d=new Date(d0); d.setUTCDate(d.getUTCDate()+i); dates.push(d.toISOString().slice(0,10)); vals.push(c/100); });
   return {dates,vals};
 }
 function historySync(id){ const n=META?.shards||128; const p=SH.get(id%n); if(!p||!p.done) return null; return histFrom(p.val,id); }
 
 /* ================= Speicher (IndexedDB + localStorage-Spiegel) ================= */
-const DEFAULT_SETTINGS={margin:-5,th:10,de:0,jp:0,basis:'low'};
+const DEFAULT_SETTINGS={margin:-5,th:10,de:0,jp:0,basis:'market'};
 let ST={positions:[],settings:{...DEFAULT_SETTINGS}};
 const LS='preisradar-mappe-v1';
 let idb=null;
@@ -418,7 +423,7 @@ function openDB(){ return new Promise(res=>{ try{ const q=indexedDB.open('preisr
 function idbGet(store,key){ return new Promise(res=>{ if(!idb) return res(null); try{ const t=idb.transaction(store).objectStore(store).get(key); t.onsuccess=()=>res(t.result??null); t.onerror=()=>res(null);}catch(e){res(null);} }); }
 function idbPut(store,key,val){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).put(val,key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
 function idbDel(store,key){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
-function normState(s){ return {positions:Array.isArray(s?.positions)?s.positions:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; }
+function normState(s){ const st={positions:Array.isArray(s?.positions)?s.positions:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; if(!st.settings.v3){ st.settings.basis='market'; st.settings.v3=true; } return st; }
 let saveT=null;
 function save(){ clearTimeout(saveT); saveT=setTimeout(async()=>{ const json=JSON.parse(JSON.stringify(ST)); await idbPut('kv','state',json); try{ localStorage.setItem(LS,JSON.stringify(json)); }catch(e){} },300); }
 async function initStore(){
@@ -437,15 +442,15 @@ async function preloadPhotos(){ await Promise.all(ST.positions.filter(p=>p.photo
 function langFactor(l){ const s=ST.settings; if(l==='DE') return 1-s.de/100; if(l==='EN') return 1; return 1-s.jp/100; }
 const unitValue=(r,p)=>basePrice(r,p.rh)*langFactor(p.lang);
 function metrics(r){
-  const h=historySync(r[F.id])||{dates:[],vals:[]}, v=h.vals, n=v.length, trend=priceOf(r,false), low=isLow();
+  const h=historySync(r[F.id])||{dates:[],vals:[]}, v=h.vals, n=v.length, trend=priceOf(r,false), low=basis()!=='trend', mk=basis()==='market';
   const back=k=>{ if(n<2) return null; const target=new Date(h.dates[n-1]); target.setUTCDate(target.getUTCDate()-k); const t=target.toISOString().slice(0,10);
     for(let i=n-1;i>=0;i--) if(h.dates[i]<=t) return v[i]; return null; };
   const v7=back(7), v30=back(30);
   const d7 = v7!=null ? trend/v7-1 : (!low&&r[F.avg7] ? trend/r[F.avg7]-1 : null);
   const d7src = v7!=null ? 'Verlauf' : (!low&&r[F.avg7]?'Ø7':null);
-  const d30 = v30!=null ? trend/v30-1 : (!low&&r[F.avg30] ? trend/r[F.avg30]-1 : null);
-  const d30src = v30!=null ? 'Verlauf' : (!low&&r[F.avg30]?'Ø30':null);
-  const ref30 = (n>=7 ? v.slice(-30).reduce((s,x)=>s+x,0)/Math.min(30,n) : (!low ? r[F.avg30] : null));
+  const d30 = v30!=null ? trend/v30-1 : ((mk||!low)&&r[F.avg30] ? trend/r[F.avg30]-1 : null);
+  const d30src = v30!=null ? 'Verlauf' : ((mk||!low)&&r[F.avg30]?'Ø30':null);
+  const ref30 = (n>=7 ? v.slice(-30).reduce((s,x)=>s+x,0)/Math.min(30,n) : ((mk||!low) ? r[F.avg30] : null));
   const max = n ? Math.max(...v) : null, maxI = n ? v.indexOf(max) : -1;
   const sig=[]; const th=ST.settings.th/100;
   if(n>=14 && trend>=max*0.98) sig.push({c:'p-high',t:'Höchststand seit '+dShort(h.dates[0])});
@@ -549,7 +554,7 @@ function renderList(){
 function renderSettings(){ const s=ST.settings, sg=v=>(v>0?'+':v<0?'−':'±')+Math.abs(v)+' %';
   $('s-margin').value=s.margin;$('s-th').value=s.th;$('s-de').value=s.de;$('s-jp').value=s.jp;
   $('s-margin-v').textContent=sg(s.margin);$('s-th-v').textContent=s.th+' %';$('s-de-v').textContent='−'+s.de+' %';$('s-jp-v').textContent='−'+s.jp+' %'; }
-function renderAll(){ document.querySelectorAll('#m-basis button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.b===(ST.settings.basis||'low'))); renderBinder(); renderList(); renderSettings(); }
+function renderAll(){ document.querySelectorAll('#m-basis button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.b===basis())); renderBinder(); renderList(); renderSettings(); }
 
 /* ================= Detail ================= */
 const posBy=k=>ST.positions.find(p=>p.k===k)||null;
@@ -571,7 +576,7 @@ function factsHTML(r){ const na='<span class="flat">–</span>', f=(k,v)=>`<div 
 function chartHTML(h){
   if(h.vals.length>=2) return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="font-size:15px">Preisverlauf</h3>
     <div class="toggle" id="rng"><button type="button" data-r="7" aria-pressed="${UI.range===7}">7 T</button><button type="button" data-r="30" aria-pressed="${UI.range===30}">30 T</button><button type="button" data-r="365" aria-pressed="${UI.range===365}">Alles</button></div></div>
-    <div class="chartbox">${chartSVG(h,UI.range)}</div><div class="note">${isLow()?'Günstigstes Angebot auf Cardmarket':'Cardmarket-Trend'}, täglich gegen 3 Uhr festgehalten, seit ${dLong(h.dates[0])}.</div>`;
+    <div class="chartbox">${chartSVG(h,UI.range)}</div><div class="note">${basis()==='low'?'Günstigstes Angebot auf Cardmarket':basis()==='trend'?'Cardmarket-Trend':'Marktpreis (Ø Verkauf 7 Tage)'}, täglich gegen 3 Uhr festgehalten, seit ${dLong(h.dates[0])}.</div>`;
   return `<div class="box"><h3>Preisverlauf</h3><div class="note">Der tägliche Verlauf wird seit ${META?dLong(META.days[0]):'heute'} aufgezeichnet und erscheint hier ab dem zweiten Tag. Bis dahin geben die Cardmarket-Durchschnitte darunter (Ø 7 und Ø 30 Tage Verkauf) eine Orientierung.</div></div>`;
 }
 UI.range=30;
@@ -586,7 +591,8 @@ async function openDetail(k){
       ${photo&&r[F.img]?`<div class="toggle" id="d-pt"><button type="button" data-p="0" aria-pressed="true">Offizielles Bild</button><button type="button" data-p="1" aria-pressed="false">Dein Foto</button></div>`:''}</div>
     <div class="dinfo">
       <div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''} · ${esc(pType(r))}</div></div>
-      <div class="big"><span class="pr">${eur.format(m.trend)}</span><span class="muted" style="font-size:13px">${BASIS_LABEL()}${isLow()&&r[F.trend]!=null?' · Trend '+eur.format(r[F.trend]):(!isLow()&&r[F.low]!=null?' · ab '+eur.format(r[F.low]):'')}</span>${m.sig.map(s=>`<span class="pill ${s.c}">${s.t}</span>`).join('')}</div>
+      <div class="big"><span class="pr">${eur.format(m.trend)}</span><span class="muted" style="font-size:13px">${BASIS_LABEL(r)}</span>${m.sig.map(s=>`<span class="pill ${s.c}">${s.t}</span>`).join('')}</div>
+      <div class="note" style="margin-top:-8px;font-size:13px">${[basis()!=='low'&&r[F.low]!=null?'Günstigstes Angebot '+eur.format(r[F.low]):'', basis()!=='market'&&isSingle(r)&&r[F.avg7]!=null?'Marktpreis '+eur.format(r[F.avg7]):'', basis()!=='trend'&&r[F.trend]!=null&&(basis()!=='market'||(isSingle(r)&&r[F.avg7]!=null))?'Trend '+eur.format(r[F.trend]):''].filter(Boolean).join(' · ')}</div>
       <div class="chips">
         <div class="chip"><span class="k">7 Tage</span><span class="v ${cls(m.d7)}">${m.d7!=null?pct(m.d7):'–'}</span><span class="note">${m.d7src==='Ø7'?'ggü. Ø 7 Tage':m.d7src?'aus Verlauf':''}</span></div>
         <div class="chip"><span class="k">30 Tage</span><span class="v ${cls(m.d30)}">${m.d30!=null?pct(m.d30):'–'}</span><span class="note">${m.d30src==='Ø30'?'ggü. Ø 30 Tage':m.d30src?'aus Verlauf':''}</span></div>
@@ -600,7 +606,7 @@ async function openDetail(k){
         <div class="line"><span>Wert gesamt</span><span class="num">${eur.format(unit*p.qty)}</span></div>
         ${p.cost!=null?`<div class="line"><span>Einkauf je Stück</span><span class="num">${eur.format(p.cost)}</span></div>`:''}${gv}
         ${p.note?`<div class="line"><span>Notiz</span><span>${esc(p.note)}</span></div>`:''}</div>
-      <div class="box sell"><h3>Vorschlag Verkaufspreis</h3><div class="line" style="align-items:baseline"><span>${isLow()?'Günstigstes Angebot':'Trend'} ${ST.settings.margin>0?'+':ST.settings.margin<0?'−':'±'} ${Math.abs(ST.settings.margin)} %${lf!==1?' mit Sprachabschlag':''}</span><span class="pr">${eur.format(sellPrice(unit))}</span></div></div>
+      <div class="box sell"><h3>Vorschlag Verkaufspreis</h3><div class="line" style="align-items:baseline"><span>${basis()==='low'?'Günstigstes Angebot':basis()==='trend'?'Trend':'Marktpreis'} ${ST.settings.margin>0?'+':ST.settings.margin<0?'−':'±'} ${Math.abs(ST.settings.margin)} %${lf!==1?' mit Sprachabschlag':''}</span><span class="pr">${eur.format(sellPrice(unit))}</span></div></div>
       <details class="box"><summary style="cursor:pointer;font-weight:600">Bearbeiten</summary>${posForm(p,'pe')}
         <div class="acts"><button type="button" class="btn primary" id="d-save">Speichern</button><label class="btn" for="d-photo">${p.photo?'Foto ersetzen':'Foto hinzufügen'}</label><input type="file" id="d-photo" accept="image/*" hidden><button type="button" class="btn danger" id="d-del">Entfernen</button></div></details>
       <a class="cm" href="https://www.cardmarket.com/de/Pokemon/Products/Search?searchString=${encodeURIComponent(r[F.en])}" target="_blank" rel="noopener">Aktuelle Angebote auf Cardmarket (mit Land, Sprache, Zustand) ↗</a>
@@ -787,7 +793,7 @@ function confirmAdd(r,file){
   const body=$('a-body'); const draft={qty:1,cost:null,lang:'DE',cond:isSingle(r)?'NM':'Versiegelt',rh:false,note:''};
   body.innerHTML=`<div class="dgrid" style="padding:0"><div class="dimg"><div class="card">${cardImg(r,'high')}</div></div>
     <div class="dinfo"><div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''}</div></div>
-    <div class="big"><span class="pr">${eur.format(priceOf(r,false))}</span><span class="muted">${BASIS_LABEL()}</span></div>
+    <div class="big"><span class="pr">${eur.format(priceOf(r,false))}</span><span class="muted">${BASIS_LABEL(r)}</span></div>
     ${posForm(draft,'ad')}
     ${file?`<label class="chk" style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ad-keep"${UI.keepPhoto===false?'':' checked'}> Mein Foto mitspeichern${UI.keepPhoto===false?' <span class="muted">(Screenshot, deshalb aus)</span>':''}</label>`:''}
     <div class="acts"><button type="button" class="btn primary" id="ad-go">In die Mappe einkleben</button><button type="button" class="btn" id="ad-back">Andere Karte wählen</button></div></div></div>`;
@@ -865,7 +871,7 @@ $('l-rows').addEventListener('click',e=>{ const r=e.target.closest('.lrow'); if(
 $('pg-prev').onclick=()=>{ UI.page--; renderBinder(); }; $('pg-next').onclick=()=>{ UI.page++; renderBinder(); };
 let tx=null; $('binder').addEventListener('touchstart',e=>{ tx=e.touches[0].clientX; },{passive:true});
 $('binder').addEventListener('touchend',e=>{ if(tx==null) return; const dx=e.changedTouches[0].clientX-tx; tx=null; if(Math.abs(dx)>60){ if(dx<0&&!$('pg-next').disabled) $('pg-next').click(); if(dx>0&&!$('pg-prev').disabled) $('pg-prev').click(); } });
-$('m-basis').querySelectorAll('button').forEach(b=>b.onclick=()=>{ ST.settings.basis=b.dataset.b; save(); renderAll(); toast(b.dataset.b==='low'?'Preise: günstigstes Angebot':'Preise: Cardmarket-Trend'); });
+$('m-basis').querySelectorAll('button').forEach(b=>b.onclick=()=>{ ST.settings.basis=b.dataset.b; save(); renderAll(); toast(b.dataset.b==='low'?'Preise: günstigstes Angebot':b.dataset.b==='trend'?'Preise: Cardmarket-Trend':'Preise: Marktpreis (Ø 7 Tage Verkauf)'); });
 $('m-order').querySelectorAll('button').forEach(b=>b.onclick=()=>{ UI.order=b.dataset.o; UI.page=0; $('m-order').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderBinder(); });
 $('l-q').oninput=e=>{ UI.lq=e.target.value; renderList(); }; $('l-sort').onchange=e=>{ UI.lsort=e.target.value; renderList(); };
 for(const [id,key] of [['s-margin','margin'],['s-th','th'],['s-de','de'],['s-jp','jp']]) $(id).addEventListener('input',e=>{ ST.settings[key]=+e.target.value; save(); renderAll(); });
