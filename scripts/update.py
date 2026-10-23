@@ -175,39 +175,46 @@ def build_catalog(pg, singles, nonsingles, cards, tsets):
         th = r2(g.get('trend-holo'))
         out.append([pid, t[1][1] if t else '', clean_en(r['name']), e, t[1][0] if t else '', t[1][2] if t else '', cat,
                     0 if t else ver.get(pid, 0), trend, low, r2(g.get('avg')), r2(g.get('avg1')), r2(g.get('avg7')),
-                    r2(g.get('avg30')), th if th else None, r2(g.get('avg30-holo')) or None, img])
+                    r2(g.get('avg30')), th if th else None, r2(g.get('avg30-holo')) or None, img, r2(g.get('low-holo')) or None])
     return {'f': ['id', 'de', 'en', 'exp', 'nr', 'rar', 'cat', 'ver', 'trend', 'low', 'avg', 'avg1', 'avg7', 'avg30',
-                  'trendHolo', 'avg30Holo', 'img'],
+                  'trendHolo', 'avg30Holo', 'img', 'lowHolo'],
             'sets': {str(k): v for k, v in sets.items()}, 'rows': out}
 
 
 # ---------------------------------------------------------------- Verlauf
 def update_history(state, catalog, date):
+    """Verlauf je Produkt: v = Trendpreis, l = Ab-Preis (günstigstes Angebot), jeweils in Cent."""
     hdir = os.path.join(state, 'history')
-    shards = collections.defaultdict(dict)
+    shards = collections.defaultdict(lambda: {'v': {}, 'l': {}})
     for r in catalog['rows']:
+        sh = shards[r[0] % SHARDS]
         if r[8] is not None:
-            shards[r[0] % SHARDS][str(r[0])] = int(round(r[8] * 100))
+            sh['v'][str(r[0])] = int(round(r[8] * 100))
+        if r[9] is not None:
+            sh['l'][str(r[0])] = int(round(r[9] * 100))
     d = dt.date.fromisoformat(date)
     for s in range(SHARDS):
         path = os.path.join(hdir, f'{s}.json')
         h = load(path, None) or {'d0': date, 'v': {}}
+        h.setdefault('l', {})
         d0 = dt.date.fromisoformat(h['d0'])
         idx = (d - d0).days
         if idx < 0:
             continue
-        for pid, cents in shards[s].items():
-            arr = h['v'].setdefault(pid, [])
-            if len(arr) < idx:
-                arr.extend([None] * (idx - len(arr)))
-            if len(arr) == idx:
-                arr.append(cents)
-            else:
-                arr[idx] = cents
+        for key in ('v', 'l'):
+            for pid, cents in shards[s][key].items():
+                arr = h[key].setdefault(pid, [])
+                if len(arr) < idx:
+                    arr.extend([None] * (idx - len(arr)))
+                if len(arr) == idx:
+                    arr.append(cents)
+                else:
+                    arr[idx] = cents
         if idx + 1 > KEEP_DAYS:
             cut = idx + 1 - KEEP_DAYS
             h['d0'] = (d0 + dt.timedelta(days=cut)).isoformat()
-            h['v'] = {k: v[cut:] for k, v in h['v'].items() if any(x is not None for x in v[cut:])}
+            for key in ('v', 'l'):
+                h[key] = {k: v[cut:] for k, v in h[key].items() if any(x is not None for x in v[cut:])}
         dump(path, h)
 
 
