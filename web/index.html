@@ -726,7 +726,7 @@ async function recognize(file, onStep){
   else if(strongProd || !cardLike){ cands=prods.map(x=>x[1]).concat(singles.slice(0,8)); kind=prods.length?'product':'card'; }
   else cands=singles.concat(prods.slice(0,6).map(x=>x[1]));
   const seen=new Set(); cands=cands.filter(r=>!seen.has(r[F.id])&&seen.add(r[F.id])).slice(0,24);
-  return {text:[text,numText,fullText].join('\n'), num, cands, kind};
+  return {text:[text,numText,fullText].join('\n'), num, cands, kind, shot:ratio<0.6};
 }
 
 /* ================= Einkleben ================= */
@@ -738,7 +738,7 @@ function openAdd(){
     </div>
     <input type="file" id="a-cam" accept="image/*" capture="environment" hidden>
     <div id="a-body"></div></div>`);
-  $('a-cam').onchange=e=>{ const f=e.target.files[0]; if(f) runPhoto(f); };
+  $('a-cam').onchange=e=>{ const f=e.target.files[0]; if(f){ UI.keepPhoto=true; runPhoto(f); } };
   $('a-search-go').onclick=()=>showSearch('',null);
 }
 async function runPhoto(file){
@@ -750,6 +750,7 @@ async function runPhoto(file){
   OCR.abort=null; if(cancelled||!$('a-body')) return;
   const n0=res.num&&!res.num.alts?res.num:null, top0=res.cands[0];
   const hint=res.kind==='product'?'Produkt erkannt':n0?`Erkannt: Nummer <b>${esc(n0.nr)}${n0.total?'/'+n0.total:''}</b>`:(res.num?.alts&&top0?`Nummer vermutlich <b>${esc(top0[F.nr])}</b>`:'Keine Kartennummer erkannt');
+  UI.keepPhoto=!res.shot;
   showCands(res.cands, file, `${hint}. Tippe auf das passende Produkt.`, res.text);
 }
 function candHTML(r,sel){ return `<button type="button" class="cand" data-id="${r[F.id]}" aria-pressed="${sel===r[F.id]}"><div class="im">${cardImg(r,'low')}</div>
@@ -784,7 +785,7 @@ function confirmAdd(r,file){
     <div class="dinfo"><div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''}</div></div>
     <div class="big"><span class="pr">${eur.format(r[F.trend]??r[F.low])}</span><span class="muted">Cardmarket-Trend</span></div>
     ${posForm(draft,'ad')}
-    ${file?`<label class="chk" style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ad-keep" checked> Mein Foto mitspeichern</label>`:''}
+    ${file?`<label class="chk" style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ad-keep"${UI.keepPhoto===false?'':' checked'}> Mein Foto mitspeichern${UI.keepPhoto===false?' <span class="muted">(Screenshot, deshalb aus)</span>':''}</label>`:''}
     <div class="acts"><button type="button" class="btn primary" id="ad-go">In die Mappe einkleben</button><button type="button" class="btn" id="ad-back">Andere Karte wählen</button></div></div></div>`;
   $('ad-back').onclick=()=>showSearch('',file);
   $('ad-go').onclick=async()=>{
