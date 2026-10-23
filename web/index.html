@@ -343,7 +343,7 @@ const eur0 = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maxi
 const pct = v => (v>0?'+':v<0?'−':'±') + Math.abs(v*100).toLocaleString('de-DE',{maximumFractionDigits:1,minimumFractionDigits:1}) + ' %';
 const cls = v => v==null?'flat':v>0.005?'up':v<-0.005?'down':'flat';
 const esc = s => String(s ?? '').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[-_.,:;'’"()\[\]!?&/]+/g,' ').replace(/\s+/g,' ').trim();
+const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim();
 const dShort = s => s.slice(8,10)+'.'+s.slice(5,7)+'.';
 const dLong = s => s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4);
 function toast(msg,ms=2600){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,ms); }
