@@ -679,29 +679,61 @@ function rankCandidates(topText, num, fullText=''){
   let out=run(true); if(opts.length&&(!out.length||out[0][0]<70)){ const alt=run(false); out=out.concat(alt.filter(x=>!out.some(y=>y[1]===x[1]))); }
   return out.slice(0,24).map(x=>x[1]);
 }
+/* Versiegelte Produkte und Cardmarket-Screenshots über den Produktnamen finden */
+const PSTOP=new Set(['pokemon','the','and','und','der','die','das','with','mit','tcg','box','sets','set','info','sealed','produkte','produkt','verkauft','werden','nur','ganzes','manufacturer','company','international','artikel','verfugbare','trend','preis','cardmarket','support','kontaktieren','konto','eroffnen','suche','auf']);
+let PIDX=null;
+function prodIndex(){ if(PIDX) return PIDX; PIDX=[];
+  CAT.rows.forEach((r,i)=>{ if(isSingle(r)) return; const toks=[...new Set(norm(r[F.en]+' '+pSet(r)+' '+(CAT_DE[r[F.cat]]||'')).split(' ').filter(t=>t.length>=3&&!PSTOP.has(t)))]; if(toks.length) PIDX.push([i,toks,norm(r[F.en])]); });
+  return PIDX; }
+function priceHint(text){ const m=text.match(/(?:preis\s*-?\s*trend|price\s*trend)[^0-9]{0,12}([0-9.]+,[0-9]{2}|[0-9]+(?:\.[0-9]{2})?)/i); if(!m) return null; return parseFloat(m[1].replace(/\./g,'').replace(',','.'))||parseFloat(m[1]); }
+function matchProducts(text){
+  const nt=' '+norm(text)+' ', have=new Set(nt.trim().split(' ')), ph=priceHint(text), out=[];
+  for(const [i,toks,full] of prodIndex()){
+    let hit=0,all=0,n=0; for(const t of toks){ all+=t.length; if(have.has(t)){ hit+=t.length; n++; } }
+    if(!n) continue; const cov=hit/all; if(cov<0.5||n<2) continue;
+    const r=CAT.rows[i]; let s=cov*100+n*4;
+    if(full.length>8&&nt.includes(' '+full+' ')) s+=60;
+    const tr=r[F.trend]??r[F.low]; if(ph&&tr){ const d=Math.abs(tr-ph)/ph; if(d<0.03) s+=30; else if(d<0.12) s+=12; }
+    out.push([s,r]); }
+  out.sort((a,b)=>b[0]-a[0]||((b[1][F.trend]||0)-(a[1][F.trend]||0)));
+  return out.slice(0,18);
+}
 async function recognize(file, onStep){
-  const c=await fileToCanvas(file,2400), W=c.width, H=c.height;
+  const c=await fileToCanvas(file,2400), W=c.width, H=c.height, ratio=W/H;
+  const cardLike = ratio>0.62 && ratio<0.85;   // Handyfoto einer Karte (hochkant); Screenshots sind schmaler, Boxen oft quer
   onStep('Texterkennung wird geladen …',10);
   const w=await getWorker(m=>{ if(m.progress!=null) onStep('Texterkennung wird geladen …',10+Math.round(m.progress*35)); });
-  const wn=await getWorker(null,'num');
-  onStep('Name wird gelesen …',55);
-  const top=await w.recognize(prep(c,0,0,W,Math.round(H*0.2),W<1000?1.6:1));
-  onStep('Kartennummer wird gelesen …',70);
-  const sc=W<1000?4:W<1600?2.5:1.6; let numText='', num=null;
-  for(const [x0,y0,ww,hh] of [[0,0.88,0.55,0.12],[0.45,0.88,0.55,0.12],[0,0.80,1,0.2]]){
-    const r=await wn.recognize(prep(c,Math.round(W*x0),Math.round(H*y0),Math.round(W*ww),Math.round(H*hh),sc)); numText+='\n'+r.data.text;
-    num=parseNumber(numText); if(num&&!num.alts) break; }
-  let text=top.data.text, fullText='';
-  if(!num || !rankCandidates(text,num).length){ onStep('Ganze Karte wird gelesen …',85); const full=await w.recognize(prep(c,0,0,W,H,W<1000?1.4:1)); fullText=full.data.text; if(!num) num=parseNumber(fullText); }
+  let text='', numText='', fullText='', num=null;
+  if(cardLike){
+    const wn=await getWorker(null,'num');
+    onStep('Name wird gelesen …',55);
+    text=(await w.recognize(prep(c,0,0,W,Math.round(H*0.2),W<1000?1.6:1))).data.text;
+    onStep('Kartennummer wird gelesen …',68);
+    const sc=W<1000?4:W<1600?2.5:1.6;
+    for(const [x0,y0,ww,hh] of [[0,0.88,0.55,0.12],[0.45,0.88,0.55,0.12],[0,0.80,1,0.2]]){
+      const r=await wn.recognize(prep(c,Math.round(W*x0),Math.round(H*y0),Math.round(W*ww),Math.round(H*hh),sc)); numText+='\n'+r.data.text;
+      num=parseNumber(numText); if(num&&!num.alts) break; }
+  }
+  const singlesFirst = cardLike && num && !num.alts && rankCandidates(text,num).length;
+  if(!singlesFirst){ onStep(cardLike?'Ganzes Bild wird gelesen …':'Bild wird gelesen …',80);
+    fullText=(await w.recognize(prep(c,0,0,W,H,W<1000?1.5:1))).data.text; if(!num) num=parseNumber(fullText); }
   onStep('Abgleich mit dem Katalog …',96);
-  return {text:[text,numText,fullText].join('\n'), num, cands:rankCandidates(text,num,fullText)};
+  const singles=rankCandidates(cardLike?text:fullText.split('\n').slice(0,12).join('\n'),num,fullText);
+  const prods=fullText?matchProducts(fullText):[];
+  const strongProd = prods.length && prods[0][0]>=95;
+  let cands, kind='card';
+  if(singlesFirst) cands=singles.concat(prods.slice(0,4).map(x=>x[1]));
+  else if(strongProd || !cardLike){ cands=prods.map(x=>x[1]).concat(singles.slice(0,8)); kind=prods.length?'product':'card'; }
+  else cands=singles.concat(prods.slice(0,6).map(x=>x[1]));
+  const seen=new Set(); cands=cands.filter(r=>!seen.has(r[F.id])&&seen.add(r[F.id])).slice(0,24);
+  return {text:[text,numText,fullText].join('\n'), num, cands, kind};
 }
 
 /* ================= Einkleben ================= */
 function openAdd(){
-  openModal(`<div class="addwrap"><h2>Karte einkleben</h2>
+  openModal(`<div class="addwrap"><h2>Karte oder Produkt einkleben</h2>
     <div class="choice">
-      <label for="a-cam"><b>Foto machen oder wählen</b><span>Halte die Karte gerade und gut beleuchtet ins Bild. Name oben und Nummer unten links müssen lesbar sein.</span></label>
+      <label for="a-cam"><b>Foto oder Screenshot</b><span>Karte gerade und hell ins Bild, Name oben und Nummer unten müssen lesbar sein. Für Displays, ETBs und Boxen: Foto der Verpackung oder Screenshot der Cardmarket-Seite.</span></label>
       <button type="button" id="a-search-go"><b>Suchen</b><span>Name (deutsch oder englisch), Set oder Nummer, auch für Displays, ETBs und andere versiegelte Produkte.</span></button>
     </div>
     <input type="file" id="a-cam" accept="image/*" capture="environment" hidden>
@@ -717,8 +749,8 @@ async function runPhoto(file){
   catch(e){ if(!$('a-body')) return; body.innerHTML+=`<p class="down">Die Texterkennung hat nicht geklappt. Such die Karte stattdessen über den Namen.</p>`; showSearch('',file); return; }
   OCR.abort=null; if(cancelled||!$('a-body')) return;
   const n0=res.num&&!res.num.alts?res.num:null, top0=res.cands[0];
-  const hint=n0?`Erkannt: Nummer <b>${esc(n0.nr)}${n0.total?'/'+n0.total:''}</b>`:(res.num?.alts&&top0?`Nummer vermutlich <b>${esc(top0[F.nr])}</b>`:'Keine Kartennummer erkannt');
-  showCands(res.cands, file, `${hint}. Tippe auf die passende Karte.`, res.text);
+  const hint=res.kind==='product'?'Produkt erkannt':n0?`Erkannt: Nummer <b>${esc(n0.nr)}${n0.total?'/'+n0.total:''}</b>`:(res.num?.alts&&top0?`Nummer vermutlich <b>${esc(top0[F.nr])}</b>`:'Keine Kartennummer erkannt');
+  showCands(res.cands, file, `${hint}. Tippe auf das passende Produkt.`, res.text);
 }
 function candHTML(r,sel){ return `<button type="button" class="cand" data-id="${r[F.id]}" aria-pressed="${sel===r[F.id]}"><div class="im">${cardImg(r,'low')}</div>
   <div class="t">${esc(pName(r))}</div><div class="s">${esc(pSet(r))}${r[F.nr]?' · #'+esc(r[F.nr]):''}${r[F.rar]?' · '+esc(RAR[r[F.rar]]||r[F.rar]):''}</div><div class="pr" style="font-size:13px">${eur.format(r[F.trend]??r[F.low])}</div></button>`; }
