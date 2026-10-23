@@ -384,6 +384,8 @@ function priceOf(r,rh,b=basis()){
   if(b==='market'&&isSingle(r)&&r[F.avg7]!=null) return r[F.avg7];
   return r[F.trend]??r[F.low]??0; }
 function basePrice(r,rh){ return priceOf(r,rh); }
+const CM_LANG={EN:1,FR:2,DE:3,ES:4,IT:5,JP:7};
+function cmUrl(r,lang){ const l=lang&&CM_LANG[lang]; return `https://www.cardmarket.com/de/Pokemon/Products?idProduct=${r[F.id]}${l?'&language='+l:''}`; }
 
 async function loadCatalog(){
   try{
@@ -609,7 +611,10 @@ async function openDetail(k){
       <div class="box sell"><h3>Vorschlag Verkaufspreis</h3><div class="line" style="align-items:baseline"><span>${basis()==='low'?'Günstigstes Angebot':basis()==='trend'?'Trend':'Marktpreis'} ${ST.settings.margin>0?'+':ST.settings.margin<0?'−':'±'} ${Math.abs(ST.settings.margin)} %${lf!==1?' mit Sprachabschlag':''}</span><span class="pr">${eur.format(sellPrice(unit))}</span></div></div>
       <details class="box"><summary style="cursor:pointer;font-weight:600">Bearbeiten</summary>${posForm(p,'pe')}
         <div class="acts"><button type="button" class="btn primary" id="d-save">Speichern</button><label class="btn" for="d-photo">${p.photo?'Foto ersetzen':'Foto hinzufügen'}</label><input type="file" id="d-photo" accept="image/*" hidden><button type="button" class="btn danger" id="d-del">Entfernen</button></div></details>
-      <a class="cm" href="https://www.cardmarket.com/de/Pokemon/Products/Search?searchString=${encodeURIComponent(r[F.en])}" target="_blank" rel="noopener">Aktuelle Angebote auf Cardmarket (mit Land, Sprache, Zustand) ↗</a>
+      <div class="acts">
+        <a class="btn primary" href="${cmUrl(r,'DE')}" target="_blank" rel="noopener">Deutsche Angebote auf Cardmarket ↗</a>
+        <a class="btn" href="${cmUrl(r)}" target="_blank" rel="noopener">Alle Angebote ↗</a>
+      </div>
     </div></div>`;
   openModal(html);
   if(h.vals.length>=2){ bindChart(h,UI.range); $('rng').querySelectorAll('button').forEach(b=>b.onclick=()=>{ UI.range=+b.dataset.r; openDetail(k); }); }
