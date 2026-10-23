@@ -856,7 +856,7 @@ function renderImport(){
   <div class="acts"><button type="button" class="btn primary" id="imp-go"${ok?'':' disabled'}>${ok} Karten einkleben</button><button type="button" class="btn" id="imp-cancel">Verwerfen</button></div>`;
   $('imp-result').querySelectorAll('[data-imp]').forEach(s=>s.onchange=()=>{ const x=L[+s.dataset.imp]; x.pick=s.value?+s.value:null; x.sure=true; renderImport(); });
   $('imp-go').onclick=async()=>{ let n=0, slot=Math.max(-1,...ST.positions.map(x=>x.slot??0))+1; const now=new Date().toISOString();
-    for(const x of L){ if(x.pick==null) continue; ST.positions.push({k:'p'+Date.now().toString(36)+n, id:x.pick, qty:x.qty, cost:x.cost, lang:x.lang, cond:x.cond, rh:x.rh, note:'Import', added:now, slot:slot++}); n++; }
+    for(const x of L){ if(x.pick==null) continue; ST.positions.push({k:'p'+Date.now().toString(36)+n, id:x.pick, qty:x.qty, cost:x.cost, lang:x.lang, cond:x.cond, rh:x.rh, note:x.note||'Import', added:now, slot:slot++}); n++; }
     IMP=null; $('imp-text').value=''; save(); await loadHistoryFor(ST.positions.map(p=>p.id)); renderAll(); renderImport(); setView('mappe'); toast(n+' Karten eingeklebt'); };
   $('imp-cancel').onclick=()=>{ IMP=null; renderImport(); };
 }
@@ -896,7 +896,20 @@ $('bk-clear').onclick=()=>{ $('bk-confirm').innerHTML=`<div class="notice warn" 
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
 let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(renderBinder,150); });
 
-(async()=>{ await initStore(); renderSettings(); await preloadPhotos(); await loadCatalog(); })();
+/* Import per Link/QR-Code: #import=ID*Menge*Sprache*Zustand*EK*Notiz,ID*… (Teil hinter # geht nicht an den Server) */
+function importFromHash(){
+  const m=location.hash.match(/^#import=(.+)$/); if(!m||!CAT) return;
+  history.replaceState(null,'',location.pathname+location.search);
+  const rows=m[1].split(',').map(e=>e.split('*').map(x=>decodeURIComponent(x||'')));
+  IMP=rows.map(([id,qty,lang,cond,cost,note])=>{ const r=prod(+id);
+    return {rec:{id, name:r?pName(r):'ID '+id, set:r?pSet(r):'', nr:r?r[F.nr]:''}, cand:r?[r]:[], pick:r?r[F.id]:null, sure:!!r,
+      qty:Math.max(1,parseInt(qty,10)||1), cost:cost?num(cost):null, lang:LANGS.includes(lang)?lang:'DE', cond:CONDS.includes(cond)?cond:(r&&!isSingle(r)?'Versiegelt':'NM'), rh:false, note}; });
+  setView('import'); renderImport();
+  $('imp-result').scrollIntoView({behavior:'smooth'});
+  toast(rows.length+' Karten aus dem Link geladen – bitte prüfen und einkleben',4000);
+}
+(async()=>{ await initStore(); renderSettings(); await preloadPhotos(); await loadCatalog(); importFromHash(); })();
+window.addEventListener('hashchange',importFromHash);
 </script>
 </body>
 </html>
