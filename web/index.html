@@ -660,13 +660,18 @@ function rankCandidates(topText, num, fullText=''){
   const byNr=new Map(); for(const o of opts){ const k=nn(o.nr); if(!byNr.has(k)) byNr.set(k,[]); byNr.get(k).push(o.total); }
   const run=useNum=>{
     const sc=new Map(name);
-    if(useNum&&byNr.size) CAT.rows.forEach((r,i)=>{ if(!isSingle(r)) return; const rn=nn(r[F.nr]||''); if(rn&&byNr.has(rn)&&!sc.has(i)) sc.set(i,0); });
+    const fuzzy=new Map();
+    if(useNum&&byNr.size) CAT.rows.forEach((r,i)=>{ if(!isSingle(r)) return; const rn=nn(r[F.nr]||''); if(!rn) return;
+      if(byNr.has(rn)){ if(!sc.has(i)) sc.set(i,0); return; }
+      if(strict) return; const c=pSetO(r).c; if(!c) return;
+      for(const [k,tots] of byNr){ if(tots.includes(c)&&k.length===rn.length&&[...k].filter((ch,j)=>ch!==rn[j]).length===1){ fuzzy.set(i,true); if(!sc.has(i)) sc.set(i,0); } } });
     const out=[];
     for(const [i,ns] of sc){ const r=CAT.rows[i]; let s=ns;
       if(useNum&&byNr.size){ const rn=nn(r[F.nr]||''), tots=byNr.get(rn), c=pSetO(r).c;
         if(tots){ const exact=tots.some(t=>t&&c&&t===c), near=tots.some(t=>t&&c&&Math.abs(t-c)<=2);
           if(strict){ if(exact) s+=110; else if(ns<60) continue; }
           else { s+=60; if(exact) s+=50; else if(near) s+=15; } }
+        else if(fuzzy.has(i)) s+=75;
         else if(ns<60) continue; }
       if(r[F.de]) s+=5; out.push([s,r]); }
     out.sort((a,b)=>b[0]-a[0]||((b[1][F.trend]||0)-(a[1][F.trend]||0)));
