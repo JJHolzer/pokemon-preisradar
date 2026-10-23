@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pokémon Preisradar</title>
+<meta name="description" content="Sammelmappe mit täglichen Cardmarket-Preisen">
+<meta name="theme-color" content="#14171f">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Preisradar">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Kopf, Kennzahlen, Sammelmappe (Doppelseite am Desktop, Einzelseite am Handy) mit 3×3 Hüllen; Karte antippen öffnet Detailblatt */
+:root{
+  --bg:#eef0f4; --surface:#ffffff; --surface-2:#e8eaf0; --line:#d6dae3;
+  --fg:#161921; --muted:#5d6374; --accent:#b98500; --accent-ink:#1b1400; --accent-soft:#fff2c4;
+  --up:#13804a; --up-soft:#e2f5ea; --down:#c4362c; --down-soft:#fbe7e5; --chart:#3653c9; --chart-fill:rgba(54,83,201,.12);
+  --binder:#26324a; --binder-2:#1d2639; --page:#f7f8fb; --pocket:#e9ecf3; --sheen:rgba(255,255,255,.35); --ring:#c9ced8;
+  --f-display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",Roboto,Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f1117; --surface:#171a23; --surface-2:#1f2330; --line:#2b3040;
+  --fg:#e8eaf0; --muted:#9097aa; --accent:#f5c518; --accent-ink:#1b1400; --accent-soft:#3a3010;
+  --up:#3fcf83; --up-soft:#15301f; --down:#ff6b5e; --down-soft:#3a1916; --chart:#8aa2ff; --chart-fill:rgba(138,162,255,.14);
+  --binder:#1b2233; --binder-2:#141a28; --page:#232a3a; --pocket:#1a2030; --sheen:rgba(255,255,255,.08); --ring:#59607a;
+  color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+[hidden]{display:none!important}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.muted{color:var(--muted)}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
+
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:36px;height:36px;flex:none}
+.brand h1{font-size:26px;line-height:1}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.stamp{font-size:12px;color:var(--muted);text-align:right}
+.stamp b{color:var(--fg);font-weight:600}
+
+nav.views{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+nav.views button{border:0;background:transparent;padding:10px 14px;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+nav.views button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+
+.notice{border-radius:var(--r);padding:10px 14px;font-size:13.5px;border:1px solid var(--line);background:var(--surface)}
+.notice.warn{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;min-width:0}
+.kpi .lab{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kpi .val{font-family:var(--f-mono);font-size:21px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .sub{font-size:12.5px;color:var(--muted)}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi .val{font-size:18px}}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 13px;cursor:pointer;font-size:14px;font-weight:500;display:inline-flex;gap:6px;align-items:center;justify-content:center}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--down)}
+.btn:disabled{opacity:.5;cursor:default}
+.field{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--fg);min-width:0;width:100%}
+.seg{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:999px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:999px;cursor:pointer;font-size:13.5px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tag{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.pill{font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap;font-weight:500}
+.p-high{background:var(--accent);color:var(--accent-ink)} .p-up{background:var(--up-soft);color:var(--up)} .p-down{background:var(--down-soft);color:var(--down)}
+
+/* ---------- Sammelmappe ---------- */
+.binder-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pager{display:flex;align-items:center;gap:8px}
+.pager button{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:18px}
+.pager button:disabled{opacity:.35;cursor:default}
+.binder{background:linear-gradient(160deg,var(--binder),var(--binder-2));border-radius:18px;padding:18px;box-shadow:0 18px 40px rgba(10,14,25,.28), inset 0 0 0 1px rgba(255,255,255,.05);touch-action:pan-y}
+.spread{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:860px){.spread{grid-template-columns:1fr}.spread .page:nth-child(2){display:none}}
+.page{background:var(--page);border-radius:10px;padding:14px 14px 14px 30px;position:relative;min-width:0}
+.page::before{content:"";position:absolute;left:10px;top:12%;bottom:12%;width:8px;
+  background:radial-gradient(circle at 4px 4px,var(--ring) 3.4px,transparent 4px) 0 0/8px 33.3% repeat-y}
+.page .pno{position:absolute;bottom:4px;right:12px;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.pockets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:420px){.pockets{gap:7px}.page{padding:10px 10px 18px 24px}.page::before{left:7px}}
+.pocket{position:relative;aspect-ratio:63/88;border-radius:7px;background:var(--pocket);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);overflow:hidden;cursor:pointer;padding:0;display:block;width:100%}
+.pocket::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,var(--sheen) 0%,transparent 28%,transparent 62%,var(--sheen) 100%);pointer-events:none;mix-blend-mode:screen;opacity:.7}
+.pocket.empty{display:grid;place-items:center;color:var(--muted);font-size:26px;border-style:dashed}
+.pocket.empty span{font-size:11px;display:block;text-align:center}
+.pocket img{width:100%;height:100%;object-fit:cover;display:block}
+img.ci{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lrow .th,.cand .im,.dimg .card{position:relative}
+.lrow .th .ph b{font-size:7px}.lrow .th .ph small{display:none}.cand .ph b{font-size:12px}
+.ph{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:10px;text-align:center;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 30%,var(--surface)),var(--surface-2));color:var(--fg)}
+.ph b{font-family:var(--f-display);font-size:13px;line-height:1.15}
+.ph small{font-size:10.5px;color:var(--muted)}
+.pocket .price{position:absolute;left:5px;right:5px;bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:4px;
+  background:rgba(12,15,22,.82);color:#fff;border-radius:6px;padding:3px 6px;font-family:var(--f-mono);font-size:11.5px;backdrop-filter:blur(3px)}
+.pocket .price .c{font-size:10.5px}
+.pocket .price .c.up{color:#5be39a}.pocket .price .c.down{color:#ff8a80}
+.pocket .qty{position:absolute;top:5px;right:5px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:11px;border-radius:999px;padding:1px 7px}
+.pocket .sigdot{position:absolute;top:6px;left:6px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.pocket.fresh{animation:stick .7s ease-out}
+@keyframes stick{0%{transform:translateY(-30px) rotate(-4deg) scale(1.08);opacity:0}60%{transform:translateY(3px) rotate(.5deg)}100%{transform:none;opacity:1}}
+@media (max-width:420px){.pocket .price{font-size:10px;padding:2px 4px}.pocket .price .c{display:none}}
+
+/* ---------- Liste ---------- */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.lrow{display:grid;grid-template-columns:44px minmax(0,1fr) 90px 60px 100px;gap:12px;align-items:center;padding:8px 14px;border:0;border-bottom:1px solid var(--line);width:100%;background:transparent;text-align:left;cursor:pointer}
+.lrow:last-child{border-bottom:0}
+.lrow:hover{background:var(--surface-2)}
+.lrow .th{width:44px;aspect-ratio:63/88;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+.lrow .th img{width:100%;height:100%;object-fit:cover;display:block}
+.nm{min-width:0}
+.nm .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm .s{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.r{text-align:right}
+.pr{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:640px){.lrow{grid-template-columns:40px minmax(0,1fr) auto}.lrow .c-chg,.lrow .c-qty{display:none}}
+
+/* ---------- Dialoge ---------- */
+.scrim{position:fixed;inset:0;background:rgba(8,10,16,.55);z-index:30;display:flex;align-items:center;justify-content:center;padding:20px}
+.dialog{background:var(--surface);border-radius:16px;width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.4);position:relative}
+.dialog .x{position:sticky;top:10px;float:right;margin:10px 10px 0 0;width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);cursor:pointer;font-size:19px;z-index:2}
+@media (max-width:760px){
+  .scrim{align-items:flex-end;padding:0}
+  .dialog{border-radius:16px 16px 0 0;max-height:92vh;padding-bottom:env(safe-area-inset-bottom,0px)}
+}
+.dgrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;padding:20px}
+@media (max-width:760px){.dgrid{grid-template-columns:minmax(0,1fr);padding:16px max(16px,env(safe-area-inset-left,0px))}}
+.dimg{display:flex;flex-direction:column;gap:10px;align-items:center}
+.dimg .card{width:100%;max-width:300px;aspect-ratio:63/88;border-radius:12px;overflow:hidden;background:var(--surface-2);box-shadow:0 10px 30px rgba(0,0,0,.25);position:relative}
+.dimg .card img{width:100%;height:100%;object-fit:cover;display:block}
+@media (max-width:760px){.dimg .card{max-width:210px}}
+.dinfo{display:flex;flex-direction:column;gap:14px;min-width:0}
+.dinfo h2{font-size:24px;line-height:1.15}
+.meta{color:var(--muted);font-size:13px}
+.big{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.big .pr{font-size:32px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:8px;padding:6px 10px;display:flex;flex-direction:column;min-width:92px}
+.chip .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.chip .v{font-family:var(--f-mono);font-size:15px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.fact{background:var(--surface);padding:8px 10px;min-width:0}
+.fact .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fact .v{font-family:var(--f-mono);font-size:14px;white-space:nowrap}
+.box{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.box h3{font-size:15px}
+.line{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.line span:first-child{color:var(--muted)}
+.sell{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.sell .pr{font-size:22px}
+.chartbox svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.note{font-size:12px;color:var(--muted)}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
+.form .full{grid-column:1/-1}
+.form .chk{flex-direction:row;align-items:center;gap:8px;color:var(--fg);font-size:14px}
+.form .chk input{width:auto}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.cm{font-size:13.5px;color:var(--chart);text-decoration:none;font-weight:500}
+.toggle{display:flex;gap:4px}
+.toggle button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.toggle button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* ---------- Einkleben ---------- */
+.addwrap{padding:20px;display:flex;flex-direction:column;gap:16px}
+@media (max-width:760px){.addwrap{padding:16px}}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.choice{grid-template-columns:1fr}}
+.choice label,.choice button{border:2px dashed var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;cursor:pointer;background:var(--surface);text-align:left}
+.choice label:hover,.choice button:hover{border-color:var(--accent)}
+.choice b{font-family:var(--f-display);font-size:17px}
+.choice span{font-size:13px;color:var(--muted)}
+.progress{height:6px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.cands{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.cand{border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left}
+.cand:hover,.cand[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 40%,transparent)}
+.cand .im{aspect-ratio:63/88;border-radius:6px;overflow:hidden;background:var(--surface-2);position:relative}
+.cand .im img{width:100%;height:100%;object-fit:cover}
+.cand .t{font-weight:600;font-size:13px;line-height:1.2}
+.cand .s{font-size:11.5px;color:var(--muted)}
+.mini{display:flex;gap:12px;align-items:flex-start}
+.mini img{width:90px;border-radius:8px}
+.srch{display:flex;gap:8px}
+.ocrtext{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);white-space:pre-wrap;max-height:90px;overflow:auto;background:var(--surface-2);border-radius:6px;padding:6px 8px}
+
+/* ---------- Sonstiges ---------- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel h2{font-size:19px}
+.panel p{margin:0;max-width:75ch}
+textarea.field{min-height:140px;font-family:var(--f-mono);font-size:13px;resize:vertical}
+pre.tpl{background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:12.5px;overflow-x:auto;margin:0}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--surface-2);font-weight:500}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.set label{display:flex;justify-content:space-between;font-size:14px;gap:10px}
+.set input[type=range]{width:100%;accent-color:var(--accent)}
+.set p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.fab{position:fixed;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:20;
+  background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:14px 20px;font-weight:600;font-size:15px;box-shadow:0 10px 26px rgba(0,0,0,.3);cursor:pointer;display:flex;gap:8px;align-items:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90vw;text-align:center}
+.loading{padding:50px;text-align:center;color:var(--muted)}
+footer{font-size:12.5px;color:var(--muted);max-width:80ch}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="18" fill="var(--surface)" stroke="var(--fg)" stroke-width="2.5"/>
+        <path d="M2 20h36" stroke="var(--fg)" stroke-width="2.5"/>
+        <path d="M2.2 18A18 18 0 0 1 37.8 18Z" fill="var(--accent)"/>
+        <circle cx="20" cy="20" r="5.5" fill="var(--surface)" stroke="var(--fg)" stroke-width="2.5"/>
+      </svg>
+      <div><h1>Preisradar</h1><p>Deine Sammelmappe zu Cardmarket-Preisen</p></div>
+    </div>
+    <div class="stamp">Cardmarket-Preise<br><b id="stamp">werden geladen …</b></div>
+  </header>
+
+  <nav class="views" role="tablist" aria-label="Bereiche">
+    <button type="button" role="tab" data-v="mappe" aria-selected="true">Sammelmappe</button>
+    <button type="button" role="tab" data-v="liste" aria-selected="false">Liste</button>
+    <button type="button" role="tab" data-v="import" aria-selected="false">Import &amp; Sicherung</button>
+    <button type="button" role="tab" data-v="settings" aria-selected="false">Einstellungen</button>
+  </nav>
+
+  <div id="storeNote" class="notice warn" hidden></div>
+
+  <section class="kpis" aria-label="Kennzahlen">
+    <div class="kpi"><div class="lab">Wert der Mappe</div><div class="val" id="k-value">–</div><div class="sub" id="k-items">–</div></div>
+    <div class="kpi"><div class="lab">Einkauf</div><div class="val" id="k-cost">–</div><div class="sub">Summe deiner Einkaufspreise</div></div>
+    <div class="kpi"><div class="lab">Gewinn / Verlust</div><div class="val" id="k-pl">–</div><div class="sub" id="k-plpct">–</div></div>
+    <div class="kpi"><div class="lab">Signale</div><div class="val" id="k-sig">–</div><div class="sub">Höchststand oder starke Abweichung</div></div>
+  </section>
+
+  <!-- Mappe -->
+  <section id="v-mappe">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="binder-bar">
+        <div class="seg" role="group" aria-label="Ordnung" id="m-order">
+          <button type="button" data-o="album" aria-pressed="true">Wie eingeklebt</button>
+          <button type="button" data-o="value" aria-pressed="false">Nach Wert</button>
+          <button type="button" data-o="set" aria-pressed="false">Nach Set</button>
+        </div>
+        <div class="pager"><button type="button" id="pg-prev" aria-label="Vorige Seite">‹</button><span class="num muted" id="pg-info">–</span><button type="button" id="pg-next" aria-label="Nächste Seite">›</button></div>
+      </div>
+      <div class="binder" id="binder"><div class="loading">Mappe wird geladen …</div></div>
+    </div>
+  </section>
+
+  <!-- Liste -->
+  <section id="v-liste" hidden>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="binder-bar">
+        <input class="field" id="l-q" type="search" placeholder="In der Mappe suchen" style="max-width:320px">
+        <select class="field" id="l-sort" style="max-width:220px" aria-label="Sortierung">
+          <option value="value">Nach Wert</option><option value="pl">Nach Gewinn %</option><option value="chg">Nach Veränderung 7 T</option><option value="name">Nach Name</option>
+        </select>
+      </div>
+      <div class="list" id="l-rows"></div>
+    </div>
+  </section>
+
+  <!-- Import -->
+  <section id="v-import" hidden>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="panel">
+        <h2>Liste importieren</h2>
+        <p>Füge eine Liste aus Excel, Google Sheets oder einer Sammler-App ein oder lade eine CSV-Datei. Erste Zeile mit Spaltennamen. Erkannt werden <b>Name</b>, <b>Set</b>, <b>Nummer</b>, <b>Menge</b>, <b>Einkauf</b>, <b>Sprache</b>, <b>Zustand</b>, <b>Reverse</b> und <b>Cardmarket-ID</b>.</p>
+        <pre class="tpl" id="tpl">Name;Set;Nummer;Menge;Einkauf;Sprache;Zustand
+Nachtara-ex;Prismatische Entwicklungen;161;1;780;DE;NM
+Glurak-ex;151;199;2;210;DE;NM
+Surging Sparks Booster Box;;;2;165;;Versiegelt</pre>
+        <textarea class="field" id="imp-text" placeholder="Liste hier einfügen …" aria-label="Importliste"></textarea>
+        <div class="acts">
+          <button type="button" class="btn primary" id="imp-check">Liste prüfen</button>
+          <label class="btn" for="imp-file">CSV-Datei wählen</label><input type="file" id="imp-file" accept=".csv,.txt,.tsv" hidden>
+          <button type="button" class="btn" id="imp-tpl">Vorlage einfügen</button>
+        </div>
+        <div id="imp-result"></div>
+      </div>
+      <div class="panel">
+        <h2>Sicherung</h2>
+        <p>Deine Mappe liegt nur auf diesem Gerät, in diesem Browser. Sichere sie regelmäßig. Die Sicherungsdatei enthält alle Karten, Einkaufspreise und Notizen, die Fotos nicht. Sie lässt sich hier oder auf einem anderen Gerät wieder einspielen.</p>
+        <div class="acts">
+          <button type="button" class="btn" id="bk-save">Sicherung herunterladen</button>
+          <label class="btn" for="bk-file">Sicherung einspielen</label><input type="file" id="bk-file" accept=".json" hidden>
+          <button type="button" class="btn" id="bk-csv">Als CSV (Excel)</button>
+          <button type="button" class="btn danger" id="bk-clear">Mappe leeren</button>
+        </div>
+        <div id="bk-confirm"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Einstellungen -->
+  <section id="v-settings" hidden>
+    <div class="panel">
+      <h2>Einstellungen</h2>
+      <div class="grid2">
+        <div class="set"><label for="s-margin"><span>Verkaufspreis gegenüber Trend</span><span class="num" id="s-margin-v"></span></label><input id="s-margin" type="range" min="-20" max="20" step="1"><p>Grundlage für den Preisvorschlag auf Vinted oder Kleinanzeigen.</p></div>
+        <div class="set"><label for="s-th"><span>Signal ab Abweichung zum 30-Tage-Schnitt</span><span class="num" id="s-th-v"></span></label><input id="s-th" type="range" min="5" max="30" step="1"><p>Liegt der Trend so weit darüber oder darunter, bekommt die Karte einen gelben Punkt.</p></div>
+        <div class="set"><label for="s-de"><span>Abschlag für deutsche Karten</span><span class="num" id="s-de-v"></span></label><input id="s-de" type="range" min="0" max="50" step="1"><p>Cardmarket führt einen Preis pro Karte über alle Sprachen. Deutsche Karten erzielen oft weniger. Trag deine Erfahrung ein.</p></div>
+        <div class="set"><label for="s-jp"><span>Abschlag für japanische und andere Sprachen</span><span class="num" id="s-jp-v"></span></label><input id="s-jp" type="range" min="0" max="60" step="1"><p>Gilt für alle Karten, die nicht Deutsch oder Englisch sind.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Preise: Cardmarket Price Guide, jeden Morgen neu abgerufen. Kartennamen, Nummern und Bilder: TCGdex. Der Trendpreis gilt für alle Angebote eines Produkts, unabhängig von Sprache und Zustand. Die Kartenerkennung läuft direkt auf deinem Gerät, Fotos verlassen es nicht.</footer>
+</div>
+
+<button type="button" class="fab" id="fab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Karte einkleben</button>
+<div id="modal"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+'use strict';
+/* ================= Grundlagen ================= */
+const $ = id => document.getElementById(id);
+const eur = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
+const eur0 = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+const pct = v => (v>0?'+':v<0?'−':'±') + Math.abs(v*100).toLocaleString('de-DE',{maximumFractionDigits:1,minimumFractionDigits:1}) + ' %';
+const cls = v => v==null?'flat':v>0.005?'up':v<-0.005?'down':'flat';
+const esc = s => String(s ?? '').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[-_.,:;'’"()\[\]!?&/]+/g,' ').replace(/\s+/g,' ').trim();
+const dShort = s => s.slice(8,10)+'.'+s.slice(5,7)+'.';
+const dLong = s => s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4);
+function toast(msg,ms=2600){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,ms); }
+const RAR={'Selten, besondere Illustration':'SIR','Selten, Illustration':'IR','Ultra Selten':'UR','Hyperselten':'HR','Doppelselten':'RR','Versteckt Selten':'Secret','Mega Hyper Selten':'MHR','Holografisch Selten':'Holo','Häufig':'C','Ungewöhnlich':'U','Selten':'R','Promo':'Promo'};
+const CAT_DE={'Booster':'Booster','Display':'Display','Elite Trainer Boxes':'Elite Trainer Box','Box Set':'Kollektion','Tins':'Tin','Blisters':'Blister','Theme Decks':'Themendeck','Trainer Kits':'Trainer-Kit','Coins':'Münze','Lot':'Lot','PCG Set':'Set'};
+const LANGS=['DE','EN','JP','Andere'], CONDS=['NM','EX','GD','LP','PL','Versiegelt'];
+
+/* ================= Katalog ================= */
+let CAT=null, IDX=null, HAY=null, META=null;
+const F={id:0,de:1,en:2,exp:3,nr:4,rar:5,cat:6,ver:7,trend:8,low:9,avg:10,avg1:11,avg7:12,avg30:13,th:14,a30h:15,img:16};
+const prod = id => { const i=IDX?.get(id); return i==null?null:CAT.rows[i]; };
+const pName = r => r[F.de]||r[F.en];
+const pSetO = r => CAT.sets[r[F.exp]]||{};
+const pSet = r => pSetO(r).n||'';
+const isSingle = r => r[F.cat]==='S';
+const pType = r => isSingle(r)?'Karte':(CAT_DE[r[F.cat]]||r[F.cat]);
+function pSub(r){ const b=[esc(pSet(r))]; if(r[F.nr]) b.push('#'+esc(r[F.nr])); if(r[F.ver]) b.push('Version '+r[F.ver]); return b.join(' · '); }
+function imgUrl(r, q='low', alt=false){
+  const v=r[F.img]; if(!v) return '';
+  let [lang,path]=v.split(':'); if(alt) lang = lang==='de'?'en':'de';
+  return `https://assets.tcgdex.net/${lang}/${path}/${q}.webp`;
+}
+function cardImg(r, q='low', photo=null){
+  if(photo) return `<img src="${photo}" alt="${esc(pName(r))}" loading="lazy">`;
+  const u=imgUrl(r,q);
+  const ph=`<div class="ph"><b>${esc(pName(r))}</b><small>${esc(pSet(r))}${r[F.nr]?' · #'+esc(r[F.nr]):''}</small><small>${esc(pType(r))}</small></div>`;
+  if(!u) return ph;
+  return ph+`<img class="ci" src="${u}" data-alt="${imgUrl(r,q,true)}" alt="${esc(pName(r))}" loading="lazy" onerror="imgFail(this)">`;
+}
+window.imgFail = el => { if(el.dataset.alt){ const a=el.dataset.alt; el.dataset.alt=''; el.src=a; } else el.remove(); };
+function basePrice(r,rh){ const th=r[F.th]; if(rh&&th>0) return th; return r[F.trend]??r[F.low]??0; }
+
+async function loadCatalog(){
+  try{
+    const [m,c]=await Promise.all([fetch('data/meta.json',{cache:'no-cache'}).then(r=>r.json()), fetch('data/katalog.json').then(r=>r.json())]);
+    META=m; CAT=c;
+  }catch(e){ $('stamp').textContent='Preise nicht erreichbar'; $('binder').innerHTML='<div class="loading">Die Preisdaten konnten nicht geladen werden. Prüf die Internetverbindung und lade neu.</div>'; return; }
+  IDX=new Map(CAT.rows.map((r,i)=>[r[F.id],i]));
+  HAY=CAT.rows.map(r=>norm([r[F.de],r[F.en],(CAT.sets[r[F.exp]]||{}).n,r[F.nr],r[F.rar],isSingle(r)?'':(CAT_DE[r[F.cat]]||r[F.cat])].join(' ')));
+  const d=new Date(CAT.createdAt.replace(/([+-]\d\d)(\d\d)$/,'$1:$2'));
+  $('stamp').textContent='Stand '+d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+' Uhr · Verlauf seit '+dLong(META.days[0]);
+  await loadHistoryFor(ST.positions.map(p=>p.id));
+  renderAll();
+}
+
+/* Verlauf (täglich gespeichert vom GitHub-Abruf) */
+const SH=new Map();
+function loadShard(s){
+  if(!SH.has(s)){ const p=fetch(`data/h/${s}.json`).then(r=>r.ok?r.json():null).catch(()=>null); p.then(v=>{p.done=true;p.val=v;}); SH.set(s,p); }
+  return SH.get(s);
+}
+async function loadHistoryFor(ids){ const n=META?.shards||128; await Promise.all([...new Set(ids.map(id=>id%n))].map(loadShard)); }
+async function historyAsync(id){ const n=META?.shards||128; const h=await loadShard(id%n); return histFrom(h,id); }
+function histFrom(h,id){
+  if(!h) return {dates:[],vals:[]};
+  const a=h.v[String(id)]||[]; const d0=new Date(h.d0+'T00:00:00Z'); const dates=[],vals=[];
+  a.forEach((c,i)=>{ if(c==null) return; const d=new Date(d0); d.setUTCDate(d.getUTCDate()+i); dates.push(d.toISOString().slice(0,10)); vals.push(c/100); });
+  return {dates,vals};
+}
+function historySync(id){ const n=META?.shards||128; const p=SH.get(id%n); if(!p||!p.done) return null; return histFrom(p.val,id); }
+
+/* ================= Speicher (IndexedDB + localStorage-Spiegel) ================= */
+const DEFAULT_SETTINGS={margin:-5,th:10,de:0,jp:0};
+let ST={positions:[],settings:{...DEFAULT_SETTINGS}};
+const LS='preisradar-mappe-v1';
+let idb=null;
+function openDB(){ return new Promise(res=>{ try{ const q=indexedDB.open('preisradar',1); q.onupgradeneeded=()=>{ q.result.createObjectStore('kv'); q.result.createObjectStore('photos'); }; q.onsuccess=()=>res(q.result); q.onerror=()=>res(null); }catch(e){ res(null); } }); }
+function idbGet(store,key){ return new Promise(res=>{ if(!idb) return res(null); try{ const t=idb.transaction(store).objectStore(store).get(key); t.onsuccess=()=>res(t.result??null); t.onerror=()=>res(null);}catch(e){res(null);} }); }
+function idbPut(store,key,val){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).put(val,key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
+function idbDel(store,key){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
+function normState(s){ return {positions:Array.isArray(s?.positions)?s.positions:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; }
+let saveT=null;
+function save(){ clearTimeout(saveT); saveT=setTimeout(async()=>{ const json=JSON.parse(JSON.stringify(ST)); await idbPut('kv','state',json); try{ localStorage.setItem(LS,JSON.stringify(json)); }catch(e){} },300); }
+async function initStore(){
+  idb=await openDB();
+  let s=await idbGet('kv','state');
+  if(!s){ try{ s=JSON.parse(localStorage.getItem(LS)||'null'); }catch(e){} }
+  ST=normState(s);
+  try{ if(navigator.storage?.persist) await navigator.storage.persist(); }catch(e){}
+  if(!idb){ $('storeNote').hidden=false; $('storeNote').innerHTML='<b>Speichern eingeschränkt.</b> Dieser Browser erlaubt keine dauerhafte Ablage (z. B. privates Fenster). Fotos werden nicht gespeichert, sichere die Mappe unter „Import &amp; Sicherung“.'; }
+}
+const photoURLs=new Map();
+async function photoURL(key){ if(!key) return null; if(photoURLs.has(key)) return photoURLs.get(key); const b=await idbGet('photos',key); const u=b?URL.createObjectURL(b):null; photoURLs.set(key,u); return u; }
+async function preloadPhotos(){ await Promise.all(ST.positions.filter(p=>p.photo).map(p=>photoURL(p.photo))); }
+
+/* ================= Kennzahlen ================= */
+function langFactor(l){ const s=ST.settings; if(l==='DE') return 1-s.de/100; if(l==='EN') return 1; return 1-s.jp/100; }
+const unitValue=(r,p)=>basePrice(r,p.rh)*langFactor(p.lang);
+function metrics(r){
+  const h=historySync(r[F.id])||{dates:[],vals:[]}, v=h.vals, n=v.length, trend=r[F.trend]??r[F.low];
+  const back=k=>{ if(n<2) return null; const target=new Date(h.dates[n-1]); target.setUTCDate(target.getUTCDate()-k); const t=target.toISOString().slice(0,10);
+    for(let i=n-1;i>=0;i--) if(h.dates[i]<=t) return v[i]; return null; };
+  const v7=back(7), v30=back(30);
+  const d7 = v7!=null ? trend/v7-1 : (r[F.avg7] ? trend/r[F.avg7]-1 : null);
+  const d7src = v7!=null ? 'Verlauf' : (r[F.avg7]?'Ø7':null);
+  const d30 = v30!=null ? trend/v30-1 : (r[F.avg30] ? trend/r[F.avg30]-1 : null);
+  const d30src = v30!=null ? 'Verlauf' : (r[F.avg30]?'Ø30':null);
+  const ref30 = r[F.avg30] || (n>=7 ? v.slice(-30).reduce((s,x)=>s+x,0)/Math.min(30,n) : null);
+  const max = n ? Math.max(...v) : null, maxI = n ? v.indexOf(max) : -1;
+  const sig=[]; const th=ST.settings.th/100;
+  if(n>=14 && trend>=max*0.98) sig.push({c:'p-high',t:'Höchststand seit '+dShort(h.dates[0])});
+  if(ref30){ const dev=trend/ref30-1; if(dev>=th) sig.push({c:'p-up',t:pct(dev)+' über Ø30'}); else if(dev<=-th) sig.push({c:'p-down',t:pct(dev)+' unter Ø30'}); }
+  return {h,trend,d7,d7src,d30,d30src,max,maxI,sig};
+}
+const sellPrice=u=>{ const v=u*(1+ST.settings.margin/100); return v<20?Math.round(v*2)/2:Math.round(v); };
+
+/* ================= Diagramm ================= */
+function niceTicks(mn,mx,c=4){ const span=mx-mn||Math.max(1,mx*0.1), raw=span/c, mag=Math.pow(10,Math.floor(Math.log10(raw))); const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=raw);
+  const lo=Math.floor(mn/step)*step, hi=Math.ceil(mx/step)*step, t=[]; for(let x=lo;x<=hi+step/2;x+=step) t.push(+x.toFixed(6)); if(t.length<2) t.push(+(lo+step).toFixed(6)); return t; }
+const CH={W:440,H:220,L:52,R:10,T:16,B:26};
+function chartSVG(h,range){
+  const v=h.vals.slice(-range), ds=h.dates.slice(-range), {W,H,L,R,T,B}=CH;
+  const mx0=Math.max(...v), mn0=Math.min(...v), ticks=niceTicks(mn0*0.97,mx0*1.03), lo=ticks[0], hi=ticks[ticks.length-1];
+  const x=i=>L+(v.length>1?i/(v.length-1):0.5)*(W-L-R), y=val=>T+(1-(val-lo)/((hi-lo)||1))*(H-T-B);
+  const line=v.map((val,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(val).toFixed(1)).join('');
+  const area=line+`L${x(v.length-1).toFixed(1)} ${H-B}L${x(0).toFixed(1)} ${H-B}Z`;
+  const mxI=v.indexOf(mx0), mnI=v.indexOf(mn0), step=Math.max(1,Math.round(v.length/4.5)), xl=[]; for(let i=v.length-1;i>=0;i-=step) xl.push(i);
+  const fmt=t=>t>=1000?(t/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' T€':t.toLocaleString('de-DE')+' €';
+  const lbl=(i,val,txt,col,above)=>{ const px=x(i),py=y(val),a=px>W-90?'end':px<L+50?'start':'middle'; return `<circle cx="${px}" cy="${py}" r="4" fill="${col}" stroke="var(--surface)" stroke-width="2"/><text x="${px}" y="${py+(above?-9:17)}" text-anchor="${a}" font-size="11.5" fill="${col}" font-family="IBM Plex Mono, monospace">${txt} ${eur0.format(val)}</text>`; };
+  return `<svg viewBox="0 0 ${W} ${H}" id="cv" role="img" aria-label="Preisverlauf">
+    ${ticks.map(t=>`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${fmt(t)}</text>`).join('')}
+    ${xl.map(i=>`<text x="${x(i)}" y="${H-8}" text-anchor="${i===v.length-1?'end':i===0?'start':'middle'}" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${dShort(ds[i])}</text>`).join('')}
+    <path d="${area}" fill="var(--chart-fill)"/><path d="${line}" fill="none" stroke="var(--chart)" stroke-width="2" stroke-linejoin="round"/>
+    ${v.length>2?lbl(mxI,mx0,'Hoch','var(--up)',true)+(mnI!==mxI?lbl(mnI,mn0,'Tief','var(--down)',false):''):''}
+    ${v.map((val,i)=>v.length<=10?`<circle cx="${x(i)}" cy="${y(val)}" r="3" fill="var(--chart)"/>`:'').join('')}
+    <circle cx="${x(v.length-1)}" cy="${y(v[v.length-1])}" r="4.5" fill="var(--chart)" stroke="var(--surface)" stroke-width="2"/>
+    <g class="hov" visibility="hidden"><line class="hl" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="3 3"/><circle class="hc" r="4" fill="var(--chart)"/><rect class="hb" height="22" rx="5" fill="var(--fg)"/><text class="ht" font-size="11.5" fill="var(--bg)" font-family="IBM Plex Mono, monospace"></text></g>
+    <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent"/></svg>`;
+}
+function bindChart(h,range){
+  const svg=$('cv'); if(!svg) return; const v=h.vals.slice(-range), ds=h.dates.slice(-range), {W,H,L,R,T,B}=CH;
+  const ticks=niceTicks(Math.min(...v)*0.97,Math.max(...v)*1.03), lo=ticks[0], hi=ticks[ticks.length-1];
+  const x=i=>L+(v.length>1?i/(v.length-1):0.5)*(W-L-R), y=val=>T+(1-(val-lo)/((hi-lo)||1))*(H-T-B);
+  const g=svg.querySelector('.hov'),hl=svg.querySelector('.hl'),hc=svg.querySelector('.hc'),hb=svg.querySelector('.hb'),ht=svg.querySelector('.ht');
+  const mv=ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const p=pt.matrixTransform(svg.getScreenCTM().inverse());
+    const i=Math.max(0,Math.min(v.length-1,Math.round((p.x-L)/(W-L-R)*(v.length-1)))), px=x(i), py=y(v[i]);
+    hl.setAttribute('x1',px);hl.setAttribute('x2',px);hc.setAttribute('cx',px);hc.setAttribute('cy',py);ht.textContent=dLong(ds[i])+'  '+eur.format(v[i]);
+    const tw=ht.getComputedTextLength()+14; let bx=px+10; if(bx+tw>W-R) bx=px-10-tw; hb.setAttribute('x',bx);hb.setAttribute('y',T);hb.setAttribute('width',tw);ht.setAttribute('x',bx+7);ht.setAttribute('y',T+15);g.setAttribute('visibility','visible'); };
+  svg.addEventListener('pointermove',mv); svg.addEventListener('pointerdown',mv); svg.addEventListener('pointerleave',()=>g.setAttribute('visibility','hidden'));
+}
+
+/* ================= Ansichten ================= */
+const UI={view:'mappe',order:'album',page:0,lq:'',lsort:'value',fresh:null};
+function setView(v){ UI.view=v; document.querySelectorAll('nav.views button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v)); for(const x of ['mappe','liste','import','settings']) $('v-'+x).hidden=x!==v; }
+function rowsData(){ return ST.positions.map(p=>{ const r=prod(p.id); if(!r) return {p,r:null}; const unit=unitValue(r,p), m=metrics(r);
+  return {p,r,unit,val:unit*p.qty,cost:p.cost!=null?p.cost*p.qty:null,m}; }); }
+function renderKpis(list){
+  let val=0,cost=0,cv=0,n=0,sig=0; for(const x of list){ if(!x.r) continue; val+=x.val; n+=x.p.qty; if(x.cost!=null){cost+=x.cost;cv+=x.val;} if(x.m.sig.length) sig++; }
+  $('k-value').textContent=eur0.format(val); $('k-items').textContent=n+' Stück · '+list.length+' Hüllen belegt';
+  $('k-cost').textContent=cost?eur0.format(cost):'–'; const pl=cv-cost, k=$('k-pl'); k.textContent=cost?(pl>=0?'+':'−')+eur0.format(Math.abs(pl)):'–'; k.className='val '+(cost?cls(pl):'');
+  $('k-plpct').textContent=cost?pct(pl/cost)+' auf Karten mit Einkaufspreis':'Einkaufspreise eintragen'; $('k-sig').textContent=sig+' von '+list.length;
+}
+function sortedList(){
+  const L=rowsData();
+  if(UI.order==='value') L.sort((a,b)=>(b.val||0)-(a.val||0));
+  else if(UI.order==='set') L.sort((a,b)=>(a.r?pSet(a.r):'').localeCompare(b.r?pSet(b.r):'','de')||((parseInt(a.r?.[F.nr])||0)-(parseInt(b.r?.[F.nr])||0)));
+  else L.sort((a,b)=>(a.p.slot??0)-(b.p.slot??0));
+  return L;
+}
+const perView=()=>window.matchMedia('(max-width:860px)').matches?1:2;
+function renderBinder(){
+  const el=$('binder'); if(!CAT) return;
+  const L=sortedList(); renderKpis(L);
+  const pv=perView(), pages=Math.max(1,Math.ceil((L.length+1)/9)), spreads=Math.ceil(pages/pv);
+  if(UI.page>spreads-1) UI.page=spreads-1; if(UI.page<0) UI.page=0;
+  let html='<div class="spread">';
+  for(let k=0;k<pv;k++){
+    const pi=UI.page*pv+k; if(pi>=pages && pv===2 && k===1){ html+='<div class="page" aria-hidden="true"><div class="pockets">'+Array(9).fill('<div class="pocket empty" style="visibility:hidden"></div>').join('')+'</div></div>'; continue; }
+    html+=`<div class="page"><div class="pockets">`;
+    for(let s=0;s<9;s++){
+      const i=pi*9+s, x=L[i];
+      if(!x){ html+= i===L.length ? `<button type="button" class="pocket empty" data-add aria-label="Karte einkleben">+<span>Karte einkleben</span></button>` : `<div class="pocket empty" aria-hidden="true"></div>`; continue; }
+      if(!x.r){ html+=`<button type="button" class="pocket" data-k="${x.p.k}"><div class="ph"><b>Produkt ${x.p.id}</b><small>nicht mehr im Katalog</small></div></button>`; continue; }
+      const ph = x.p.photo && !x.r[F.img] ? photoURLs.get(x.p.photo) : null;
+      html+=`<button type="button" class="pocket${UI.fresh===x.p.k?' fresh':''}" data-k="${x.p.k}" aria-label="${esc(pName(x.r))}, ${eur.format(x.unit)}">
+        ${cardImg(x.r,'low',ph)}${x.p.qty>1?`<span class="qty">${x.p.qty}×</span>`:''}${x.m.sig.length?'<span class="sigdot" title="Signal"></span>':''}
+        <span class="price"><span>${x.unit>=1000?eur0.format(x.unit):eur.format(x.unit)}</span>${x.m.d7!=null?`<span class="c ${cls(x.m.d7)}">${pct(x.m.d7).replace(' %','%')}</span>`:''}</span></button>`;
+    }
+    html+=`</div><span class="pno">Seite ${pi+1}</span></div>`;
+  }
+  html+='</div>';
+  el.innerHTML=html; UI.fresh=null;
+  $('pg-info').textContent = pv===2 ? `Seite ${UI.page*2+1}–${Math.min(UI.page*2+2,pages)} von ${pages}` : `Seite ${UI.page+1} von ${pages}`;
+  $('pg-prev').disabled=UI.page<=0; $('pg-next').disabled=UI.page>=spreads-1;
+}
+function renderList(){
+  if(!CAT) return; const q=norm(UI.lq);
+  let L=rowsData().filter(x=>!q||(x.r&&q.split(' ').every(t=>HAY[IDX.get(x.r[F.id])].includes(t))));
+  const S={value:(a,b)=>(b.val||0)-(a.val||0),pl:(a,b)=>((b.cost?b.val/b.cost:-9)-(a.cost?a.val/a.cost:-9)),chg:(a,b)=>((b.m?.d7??-9)-(a.m?.d7??-9)),name:(a,b)=>(a.r?pName(a.r):'').localeCompare(b.r?pName(b.r):'','de')};
+  L.sort(S[UI.lsort]);
+  $('l-rows').innerHTML = L.length ? L.map(x=>{ if(!x.r) return ''; const gv=x.cost!=null?(x.val-x.cost)/x.cost:null;
+    return `<button type="button" class="lrow" data-k="${x.p.k}"><div class="th">${cardImg(x.r,'low',x.p.photo&&!x.r[F.img]?photoURLs.get(x.p.photo):null)}</div>
+      <div class="nm"><div class="t">${esc(pName(x.r))}</div><div class="s">${pSub(x.r)} <span class="tag">${esc(x.p.lang)}</span></div></div>
+      <div class="r c-chg"><span class="pr ${cls(x.m.d7)}">${x.m.d7!=null?pct(x.m.d7):'–'}</span><div class="muted" style="font-size:11px">7 Tage</div></div>
+      <div class="r c-qty pr">${x.p.qty}×</div>
+      <div class="r"><div class="pr">${eur.format(x.val)}</div>${gv!=null?`<div class="pr ${cls(gv)}" style="font-size:12px">${pct(gv)}</div>`:''}</div></button>`; }).join('')
+    : '<div class="loading">Noch keine Karten. Tippe unten rechts auf „Karte einkleben“.</div>';
+}
+function renderSettings(){ const s=ST.settings, sg=v=>(v>0?'+':v<0?'−':'±')+Math.abs(v)+' %';
+  $('s-margin').value=s.margin;$('s-th').value=s.th;$('s-de').value=s.de;$('s-jp').value=s.jp;
+  $('s-margin-v').textContent=sg(s.margin);$('s-th-v').textContent=s.th+' %';$('s-de-v').textContent='−'+s.de+' %';$('s-jp-v').textContent='−'+s.jp+' %'; }
+function renderAll(){ renderBinder(); renderList(); renderSettings(); }
+
+/* ================= Detail ================= */
+const posBy=k=>ST.positions.find(p=>p.k===k)||null;
+function openModal(html){ $('modal').innerHTML=`<div class="scrim" id="scrim"><div class="dialog" role="dialog" aria-modal="true"><button type="button" class="x" id="mx" aria-label="Schließen">×</button>${html}</div></div>`;
+  $('mx').onclick=closeModal; $('scrim').onclick=e=>{ if(e.target.id==='scrim') closeModal(); }; document.body.style.overflow='hidden'; }
+function closeModal(){ $('modal').innerHTML=''; document.body.style.overflow=''; if(OCR.abort) OCR.abort(); }
+function posForm(p,pre){ return `<div class="form">
+  <label>Menge<input class="field" id="${pre}-qty" type="number" min="1" step="1" value="${p.qty}"></label>
+  <label>Einkauf je Stück (€)<input class="field" id="${pre}-cost" type="number" min="0" step="0.01" inputmode="decimal" value="${p.cost??''}" placeholder="optional"></label>
+  <label>Sprache<select class="field" id="${pre}-lang">${LANGS.map(l=>`<option${l===(p.lang||'DE')?' selected':''}>${l}</option>`).join('')}</select></label>
+  <label>Zustand<select class="field" id="${pre}-cond">${CONDS.map(c=>`<option${c===(p.cond||'NM')?' selected':''}>${c}</option>`).join('')}</select></label>
+  <label class="chk full"><input type="checkbox" id="${pre}-rh"${p.rh?' checked':''}> Reverse Holo (eigener Cardmarket-Preis)</label>
+  <label class="full">Notiz<input class="field" id="${pre}-note" type="text" value="${esc(p.note||'')}" placeholder="z. B. gekauft auf Vinted"></label></div>`; }
+function readForm(pre){ const c=$(pre+'-cost').value.trim().replace(',','.'); return {qty:Math.max(1,parseInt($(pre+'-qty').value,10)||1), cost:c===''?null:Math.max(0,parseFloat(c)||0),
+  lang:$(pre+'-lang').value, cond:$(pre+'-cond').value, rh:$(pre+'-rh').checked, note:$(pre+'-note').value.trim()}; }
+function factsHTML(r){ const na='<span class="flat">–</span>', f=(k,v)=>`<div class="fact"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  return `<div class="facts">${f('Ab-Preis',r[F.low]!=null?eur.format(r[F.low]):na)}${f('Ø Verkauf',r[F.avg]!=null?eur.format(r[F.avg]):na)}${f('Ø 1 Tag',r[F.avg1]!=null?eur.format(r[F.avg1]):na)}
+    ${f('Ø 7 Tage',r[F.avg7]!=null?eur.format(r[F.avg7]):na)}${f('Ø 30 Tage',r[F.avg30]!=null?eur.format(r[F.avg30]):na)}${f('Reverse Trend',r[F.th]>0?eur.format(r[F.th]):na)}</div>`; }
+function chartHTML(h){
+  if(h.vals.length>=2) return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="font-size:15px">Preisverlauf</h3>
+    <div class="toggle" id="rng"><button type="button" data-r="7" aria-pressed="${UI.range===7}">7 T</button><button type="button" data-r="30" aria-pressed="${UI.range===30}">30 T</button><button type="button" data-r="365" aria-pressed="${UI.range===365}">Alles</button></div></div>
+    <div class="chartbox">${chartSVG(h,UI.range)}</div><div class="note">Täglicher Cardmarket-Trend, gespeichert seit ${dLong(h.dates[0])}.</div>`;
+  return `<div class="box"><h3>Preisverlauf</h3><div class="note">Der tägliche Verlauf wird seit ${META?dLong(META.days[0]):'heute'} aufgezeichnet und erscheint hier ab dem zweiten Tag. Bis dahin zeigen Ø 7 und Ø 30 Tage, wie sich der Preis bewegt hat.</div></div>`;
+}
+UI.range=30;
+async function openDetail(k){
+  const p=posBy(k); if(!p) return; const r=prod(p.id);
+  if(!r){ openModal(`<div class="addwrap"><h2>Produkt ${p.id}</h2><p>Dieses Produkt ist nicht mehr im Cardmarket-Katalog.</p><div class="acts"><button class="btn danger" id="d-del">Aus der Mappe entfernen</button></div></div>`); $('d-del').onclick=()=>removePos(p); return; }
+  const h=await historyAsync(r[F.id]); const m=metrics(r); const unit=unitValue(r,p), lf=langFactor(p.lang);
+  const photo=p.photo?await photoURL(p.photo):null; let showPhoto=!r[F.img]&&!!photo;
+  const gv=p.cost!=null?(()=>{ const cost=p.cost*p.qty, v=unit*p.qty, pl=v-cost; return `<div class="line"><span>Gewinn / Verlust</span><span class="num ${cls(pl)}">${pl>=0?'+':'−'}${eur.format(Math.abs(pl))} (${pct(pl/cost)})</span></div>`; })():'';
+  const html=`<div class="dgrid">
+    <div class="dimg"><div class="card" id="d-card">${cardImg(r,'high',showPhoto?photo:null)}</div>
+      ${photo&&r[F.img]?`<div class="toggle" id="d-pt"><button type="button" data-p="0" aria-pressed="true">Offizielles Bild</button><button type="button" data-p="1" aria-pressed="false">Dein Foto</button></div>`:''}</div>
+    <div class="dinfo">
+      <div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''} · ${esc(pType(r))}</div></div>
+      <div class="big"><span class="pr">${eur.format(m.trend)}</span><span class="muted" style="font-size:13px">Cardmarket-Trend</span>${m.sig.map(s=>`<span class="pill ${s.c}">${s.t}</span>`).join('')}</div>
+      <div class="chips">
+        <div class="chip"><span class="k">7 Tage</span><span class="v ${cls(m.d7)}">${m.d7!=null?pct(m.d7):'–'}</span><span class="note">${m.d7src==='Ø7'?'ggü. Ø 7 Tage':m.d7src?'aus Verlauf':''}</span></div>
+        <div class="chip"><span class="k">30 Tage</span><span class="v ${cls(m.d30)}">${m.d30!=null?pct(m.d30):'–'}</span><span class="note">${m.d30src==='Ø30'?'ggü. Ø 30 Tage':m.d30src?'aus Verlauf':''}</span></div>
+        <div class="chip"><span class="k">Höchster Wert</span><span class="v">${m.max!=null?eur.format(m.max):'–'}</span><span class="note">${m.maxI>=0?'am '+dShort(m.h.dates[m.maxI]):''}</span></div>
+      </div>
+      ${chartHTML(h)}
+      ${factsHTML(r)}
+      <div class="box"><h3>In deiner Mappe</h3>
+        <div class="line"><span>Menge</span><span class="num">${p.qty}× · ${esc(p.lang)} · ${esc(p.cond)}${p.rh?' · Reverse':''}</span></div>
+        <div class="line"><span>Wert je Stück</span><span class="num">${eur.format(unit)}${lf!==1?` <span class="muted">(−${Math.round((1-lf)*100)} % ${esc(p.lang)})</span>`:''}</span></div>
+        <div class="line"><span>Wert gesamt</span><span class="num">${eur.format(unit*p.qty)}</span></div>
+        ${p.cost!=null?`<div class="line"><span>Einkauf je Stück</span><span class="num">${eur.format(p.cost)}</span></div>`:''}${gv}
+        ${p.note?`<div class="line"><span>Notiz</span><span>${esc(p.note)}</span></div>`:''}</div>
+      <div class="box sell"><h3>Vorschlag Verkaufspreis</h3><div class="line" style="align-items:baseline"><span>Trend ${ST.settings.margin>0?'+':ST.settings.margin<0?'−':'±'} ${Math.abs(ST.settings.margin)} %${lf!==1?' mit Sprachabschlag':''}</span><span class="pr">${eur.format(sellPrice(unit))}</span></div></div>
+      <details class="box"><summary style="cursor:pointer;font-weight:600">Bearbeiten</summary>${posForm(p,'pe')}
+        <div class="acts"><button type="button" class="btn primary" id="d-save">Speichern</button><label class="btn" for="d-photo">${p.photo?'Foto ersetzen':'Foto hinzufügen'}</label><input type="file" id="d-photo" accept="image/*" hidden><button type="button" class="btn danger" id="d-del">Entfernen</button></div></details>
+      <a class="cm" href="https://www.cardmarket.com/de/Pokemon/Products/Search?searchString=${encodeURIComponent(r[F.en])}" target="_blank" rel="noopener">Auf Cardmarket ansehen ↗</a>
+    </div></div>`;
+  openModal(html);
+  if(h.vals.length>=2){ bindChart(h,UI.range); $('rng').querySelectorAll('button').forEach(b=>b.onclick=()=>{ UI.range=+b.dataset.r; openDetail(k); }); }
+  $('d-pt')?.querySelectorAll('button').forEach(b=>b.onclick=()=>{ const ph=b.dataset.p==='1'; $('d-card').innerHTML=cardImg(r,'high',ph?photo:null); $('d-pt').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  $('d-save').onclick=()=>{ Object.assign(p,readForm('pe')); save(); renderAll(); openDetail(k); toast('Gespeichert'); };
+  $('d-photo').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const key=await storePhoto(f, p.photo); p.photo=key; save(); renderAll(); openDetail(k); };
+  $('d-del').onclick=()=>removePos(p);
+}
+function removePos(p){ const b=$('d-del'); if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent='Wirklich entfernen?'; return; }
+  ST.positions=ST.positions.filter(x=>x.k!==p.k); if(p.photo) idbDel('photos',p.photo); save(); closeModal(); renderAll(); toast('Aus der Mappe entfernt'); }
+
+/* ================= Fotos ================= */
+async function fileToCanvas(file,max){ const bmp=await createImageBitmap(file,{imageOrientation:'from-image'}).catch(()=>null);
+  let img=bmp; if(!img){ img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(file); }); }
+  const w=img.width,h=img.height, s=Math.min(1,max/Math.max(w,h)); const c=document.createElement('canvas'); c.width=Math.round(w*s); c.height=Math.round(h*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
+async function storePhoto(file,oldKey){ const c=await fileToCanvas(file,900); const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.82)); const key=oldKey||('ph'+Date.now().toString(36));
+  await idbPut('photos',key,blob); if(photoURLs.has(key)){ URL.revokeObjectURL(photoURLs.get(key)); photoURLs.delete(key); } await photoURL(key); return key; }
+
+/* ================= Texterkennung ================= */
+const OCR={worker:null,abort:null};
+function loadScript(src){ return new Promise((res,rej)=>{ if([...document.scripts].some(s=>s.src===src)) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+async function getWorker(onProg){
+  if(OCR.worker) return OCR.worker;
+  await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+  OCR.worker = await Tesseract.createWorker(['deu','eng'],1,{logger:m=>{ if(m.status==='recognizing text') return; onProg && onProg(m); }});
+  return OCR.worker;
+}
+function prep(canvas,x,y,w,h,scale=1){ const c=document.createElement('canvas'); c.width=Math.round(w*scale); c.height=Math.round(h*scale); const g=c.getContext('2d');
+  g.drawImage(canvas,x,y,w,h,0,0,c.width,c.height); const d=g.getImageData(0,0,c.width,c.height), a=d.data;
+  for(let i=0;i<a.length;i+=4){ let v=0.299*a[i]+0.587*a[i+1]+0.114*a[i+2]; v=(v-128)*1.5+128; v=v<0?0:v>255?255:v; a[i]=a[i+1]=a[i+2]=v; } g.putImageData(d,0,0); return c; }
+function parseNumber(text){
+  const t=text.replace(/[Oo](?=\d)|(?<=\d)[Oo]/g,'0').replace(/[Il|](?=\d{2})/g,'1');
+  let m=t.match(/\b([A-Z]{2})\s?(\d{1,3})\s*\/\s*[A-Z]{2}\s?(\d{1,3})\b/); if(m) return {nr:m[1]+m[2].padStart(2,'0'), total:null, prefix:m[1]};
+  const all=[...t.matchAll(/(\d{1,3})\s*[\/⁄]\s*(\d{2,3})/g)].map(x=>({nr:String(parseInt(x[1],10)), total:parseInt(x[2],10)})).filter(x=>x.total>=10&&x.total<=400);
+  if(all.length) return all[all.length-1];
+  m=t.match(/\b(SVP|SWSH|SM|XY|BW)\s?(\d{1,3})\b/i); if(m) return {nr:m[1].toUpperCase()+String(m[2]).padStart(3,'0'), total:null};
+  return null;
+}
+function rankCandidates(text, num){
+  const nt=' '+norm(text)+' ', out=[];
+  for(let i=0;i<CAT.rows.length;i++){
+    const r=CAT.rows[i]; if(!isSingle(r)) continue;
+    let s=0; const rn=String(r[F.nr]||'').replace(/^0+(?=\d)/,'');
+    if(num){ if(rn && rn.toLowerCase()===String(num.nr).toLowerCase().replace(/^0+(?=\d)/,'')) s+=50; else continue;
+      const set=pSetO(r); if(num.total && set.c){ if(set.c===num.total) s+=40; else if(Math.abs(set.c-num.total)<=2) s+=10; else s-=15; } }
+    const nd=norm(r[F.de]), ne=norm(r[F.en]);
+    const nameHit = (nd&&nd.length>=3&&nt.includes(' '+nd.split(' ')[0]+' ')) || (ne&&ne.length>=3&&nt.includes(' '+ne.split(' ')[0]+' '));
+    if(nameHit) s+=45; else if(!num) continue;
+    if(nd && nt.includes(' '+nd+' ')) s+=15; if(ne && nt.includes(' '+ne+' ')) s+=10;
+    if(r[F.de]) s+=3;
+    out.push([s,r]);
+  }
+  out.sort((a,b)=>b[0]-a[0]||((b[1][F.trend]||0)-(a[1][F.trend]||0)));
+  return out.slice(0,12).map(x=>x[1]);
+}
+async function recognize(file, onStep){
+  const c=await fileToCanvas(file,1600), W=c.width, H=c.height;
+  onStep('Texterkennung wird geladen …',10);
+  const w=await getWorker(m=>{ if(m.progress!=null) onStep('Texterkennung wird geladen …',10+Math.round(m.progress*40)); });
+  onStep('Name wird gelesen …',55);
+  const top=await w.recognize(prep(c,0,0,W,Math.round(H*0.2),1.5));
+  onStep('Kartennummer wird gelesen …',75);
+  const bottom=await w.recognize(prep(c,0,Math.round(H*0.82),W,Math.round(H*0.18),2));
+  let num=parseNumber(bottom.data.text), text=top.data.text+'\n'+bottom.data.text;
+  if(!num){ onStep('Ganze Karte wird gelesen …',88); const full=await w.recognize(prep(c,0,0,W,H,1)); text+='\n'+full.data.text; num=parseNumber(full.data.text); }
+  onStep('Abgleich mit dem Katalog …',96);
+  return {text, num, cands:rankCandidates(text,num)};
+}
+
+/* ================= Einkleben ================= */
+function openAdd(){
+  openModal(`<div class="addwrap"><h2>Karte einkleben</h2>
+    <div class="choice">
+      <label for="a-cam"><b>Foto machen oder wählen</b><span>Halte die Karte gerade und gut beleuchtet ins Bild. Name oben und Nummer unten links müssen lesbar sein.</span></label>
+      <button type="button" id="a-search-go"><b>Suchen</b><span>Name (deutsch oder englisch), Set oder Nummer, auch für Displays, ETBs und andere versiegelte Produkte.</span></button>
+    </div>
+    <input type="file" id="a-cam" accept="image/*" capture="environment" hidden>
+    <div id="a-body"></div></div>`);
+  $('a-cam').onchange=e=>{ const f=e.target.files[0]; if(f) runPhoto(f); };
+  $('a-search-go').onclick=()=>showSearch('',null);
+}
+async function runPhoto(file){
+  const body=$('a-body'); const prev=URL.createObjectURL(file);
+  body.innerHTML=`<div class="mini"><img src="${prev}" alt="Dein Foto"><div style="flex:1;display:flex;flex-direction:column;gap:8px"><b id="a-step">Foto wird vorbereitet …</b><div class="progress"><i id="a-bar"></i></div><span class="note">Beim ersten Mal lädt die Texterkennung einmalig ca. 10 MB.</span></div></div>`;
+  let res; let cancelled=false; OCR.abort=()=>{cancelled=true;};
+  try{ res=await recognize(file,(t,p)=>{ if(cancelled) return; const s=$('a-step'),b=$('a-bar'); if(s) s.textContent=t; if(b) b.style.width=p+'%'; }); }
+  catch(e){ if(!$('a-body')) return; body.innerHTML+=`<p class="down">Die Texterkennung hat nicht geklappt. Such die Karte stattdessen über den Namen.</p>`; showSearch('',file); return; }
+  OCR.abort=null; if(cancelled||!$('a-body')) return;
+  const hint=res.num?`Erkannt: Nummer <b>${esc(res.num.nr)}${res.num.total?'/'+res.num.total:''}</b>`:'Keine Kartennummer erkannt';
+  showCands(res.cands, file, `${hint}. Tippe auf die passende Karte.`, res.text);
+}
+function candHTML(r,sel){ return `<button type="button" class="cand" data-id="${r[F.id]}" aria-pressed="${sel===r[F.id]}"><div class="im">${cardImg(r,'low')}</div>
+  <div class="t">${esc(pName(r))}</div><div class="s">${esc(pSet(r))}${r[F.nr]?' · #'+esc(r[F.nr]):''}${r[F.rar]?' · '+esc(RAR[r[F.rar]]||r[F.rar]):''}</div><div class="pr" style="font-size:13px">${eur.format(r[F.trend]??r[F.low])}</div></button>`; }
+function showCands(cands,file,msg,ocrText){
+  const body=$('a-body'); if(!body) return;
+  body.innerHTML=`<div class="mini">${file?`<img src="${URL.createObjectURL(file)}" alt="Dein Foto">`:''}<div style="flex:1;display:flex;flex-direction:column;gap:6px"><div>${msg}</div>
+    <div class="srch"><input class="field" id="a-q" type="search" placeholder="Nicht dabei? Name oder Nummer suchen"><button class="btn" id="a-qb">Suchen</button></div>
+    ${ocrText?`<details><summary class="note" style="cursor:pointer">Gelesener Text</summary><div class="ocrtext">${esc(ocrText.trim())}</div></details>`:''}</div></div>
+    <div class="cands" id="a-cands">${cands.length?cands.map(r=>candHTML(r)).join(''):'<p class="muted">Keine passende Karte gefunden. Probier die Suche.</p>'}</div>`;
+  const go=()=>showSearch($('a-q').value,file); $('a-qb').onclick=go; $('a-q').onkeydown=e=>{ if(e.key==='Enter') go(); };
+  $('a-cands').onclick=e=>{ const b=e.target.closest('.cand'); if(b) confirmAdd(prod(+b.dataset.id),file); };
+}
+function search(q,limit=36){
+  const toks=norm(q).split(' ').filter(Boolean); if(!toks.length) return [];
+  const nq=norm(q), hits=[];
+  for(let i=0;i<CAT.rows.length;i++){ const h=HAY[i]; let ok=true; for(const t of toks){ if(!h.includes(t)){ok=false;break;} } if(!ok) continue;
+    const r=CAT.rows[i], nd=norm(r[F.de]), ne=norm(r[F.en]); let s=0; if(nd===nq||ne===nq) s+=100; else if(nd.startsWith(toks[0])||ne.startsWith(toks[0])) s+=40;
+    if(r[F.de]) s+=10; s+=Math.log10((r[F.trend]||0)+1)*5; hits.push([s,i]); }
+  hits.sort((a,b)=>b[0]-a[0]); return hits.slice(0,limit).map(h=>CAT.rows[h[1]]);
+}
+function showSearch(q,file){
+  const body=$('a-body'); if(!body) return;
+  body.innerHTML=`<div class="srch"><input class="field" id="a-q" type="search" placeholder="z. B. Glurak 199, Nachtara Prismatische, 151 Display" value="${esc(q)}"></div><div class="cands" id="a-cands"></div>`;
+  const run=()=>{ const r=search($('a-q').value); $('a-cands').innerHTML=r.length?r.map(x=>candHTML(x)).join(''):($('a-q').value.trim()?'<p class="muted">Nichts gefunden. Probier den englischen Namen oder lass die Nummer weg.</p>':''); };
+  let t; $('a-q').oninput=()=>{ clearTimeout(t); t=setTimeout(run,180); }; $('a-q').focus(); run();
+  $('a-cands').onclick=e=>{ const b=e.target.closest('.cand'); if(b) confirmAdd(prod(+b.dataset.id),file); };
+}
+function confirmAdd(r,file){
+  const body=$('a-body'); const draft={qty:1,cost:null,lang:'DE',cond:isSingle(r)?'NM':'Versiegelt',rh:false,note:''};
+  body.innerHTML=`<div class="dgrid" style="padding:0"><div class="dimg"><div class="card">${cardImg(r,'high')}</div></div>
+    <div class="dinfo"><div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''}</div></div>
+    <div class="big"><span class="pr">${eur.format(r[F.trend]??r[F.low])}</span><span class="muted">Cardmarket-Trend</span></div>
+    ${posForm(draft,'ad')}
+    ${file?`<label class="chk" style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ad-keep" checked> Mein Foto mitspeichern</label>`:''}
+    <div class="acts"><button type="button" class="btn primary" id="ad-go">In die Mappe einkleben</button><button type="button" class="btn" id="ad-back">Andere Karte wählen</button></div></div></div>`;
+  $('ad-back').onclick=()=>showSearch('',file);
+  $('ad-go').onclick=async()=>{
+    const p={k:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), id:r[F.id], added:new Date().toISOString(),
+      slot:(Math.max(-1,...ST.positions.map(x=>x.slot??0))+1), ...readForm('ad')};
+    if(file && $('ad-keep')?.checked){ try{ p.photo=await storePhoto(file); }catch(e){} }
+    ST.positions.push(p); save(); await loadHistoryFor([p.id]); closeModal();
+    UI.order='album'; document.querySelectorAll('#m-order button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.o==='album'));
+    const idx=ST.positions.length-1; UI.page=Math.floor(Math.floor(idx/9)/perView()); UI.fresh=p.k; setView('mappe'); renderAll();
+    toast(`${pName(r)} eingeklebt`);
+  };
+}
+
+/* ================= Import / Sicherung ================= */
+function parseCSV(text){ text=text.replace(/^﻿/,'').trim(); if(!text) return []; const first=text.split(/\r?\n/)[0];
+  const delim=['\t',';',','].map(d=>[d,first.split(d).length]).sort((a,b)=>b[1]-a[1])[0][0]; const rows=[]; let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){ const c=text[i]; if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true; else if(c===delim){row.push(cur);cur='';} else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(cur); rows.push(row); row=[]; cur=''; } else cur+=c; }
+  row.push(cur); rows.push(row); return rows.filter(r=>r.some(x=>x.trim())); }
+const COLS={id:/^(cardmarket ?id|idproduct|id|produkt ?id)$/,name:/^(name|karte|kartenname|card|card name|produkt|product)$/,set:/^(set|edition|erweiterung|expansion|serie)$/,nr:/^(nr|nummer|number|no|kartennummer|card number)$/,
+  qty:/^(menge|anzahl|qty|quantity|stuck|stk|count)$/,cost:/^(einkauf|ek|einkaufspreis|preis|price|kaufpreis|purchase price|cost)$/,lang:/^(sprache|language|lang)$/,cond:/^(zustand|condition|cond)$/,rh:/^(reverse|reverse holo|rh)$/};
+const LANG_MAP={de:'DE',deutsch:'DE',german:'DE',en:'EN',englisch:'EN',english:'EN',jp:'JP',ja:'JP',japanisch:'JP',japanese:'JP'};
+function num(s){ s=String(s??'').replace(/[€\s]/g,''); if(!s) return null; if(/,\d{1,2}$/.test(s)) s=s.replace(/\./g,'').replace(',','.'); else s=s.replace(/,/g,''); const v=parseFloat(s); return isNaN(v)?null:v; }
+function candidates(rec){
+  if(rec.id){ const r=prod(+rec.id); return r?[r]:[]; }
+  const nn=norm(rec.name); if(!nn) return []; const nr=String(rec.nr||'').split('/')[0].replace(/^0+(?=\d)/,'').trim().toLowerCase(), ns=norm(rec.set), out=[];
+  for(let i=0;i<CAT.rows.length;i++){ const r=CAT.rows[i], nd=norm(r[F.de]), ne=norm(r[F.en]); let s=0;
+    if(nd===nn||ne===nn) s=100; else if(HAY[i].includes(nn)) s=40; else continue;
+    if(nr){ const rn=String(r[F.nr]||'').replace(/^0+(?=\d)/,'').toLowerCase(); if(rn===nr) s+=60; else if(rn) s-=40; }
+    if(ns){ const st=norm(pSet(r)); if(st===ns) s+=50; else if(st.includes(ns)||ns.includes(st)) s+=30; else s-=20; }
+    if(r[F.de]) s+=5; out.push([s,r]); }
+  out.sort((a,b)=>b[0]-a[0]||((b[1][F.trend]||0)-(a[1][F.trend]||0))); return out.slice(0,8).map(x=>Object.assign(x[1].slice(),{_s:x[0]})); }
+let IMP=null;
+function checkImport(){
+  if(!CAT) return toast('Preise laden noch');
+  const rows=parseCSV($('imp-text').value); if(rows.length<2){ $('imp-result').innerHTML='<p class="down">Keine Daten erkannt. Erste Zeile Spaltennamen, darunter mindestens eine Karte.</p>'; return; }
+  const head=rows[0].map(norm), map={}; head.forEach((h,i)=>{ for(const [k,re] of Object.entries(COLS)) if(map[k]==null&&re.test(h)) map[k]=i; });
+  if(map.name==null&&map.id==null){ $('imp-result').innerHTML='<p class="down">Keine Spalte „Name“ oder „Cardmarket-ID“ gefunden.</p>'; return; }
+  const g=(row,k)=>map[k]==null?'':String(row[map[k]]??'').trim();
+  IMP=rows.slice(1).map(row=>{ const rec={id:g(row,'id').replace(/\D/g,''),name:g(row,'name'),set:g(row,'set'),nr:g(row,'nr')}; const cand=candidates(rec);
+    const sure=cand.length&&(rec.id||cand.length===1||(cand[0]._s-(cand[1]?._s??-999)>=40)); const lr=norm(g(row,'lang')), cond=g(row,'cond');
+    return {rec,cand,pick:cand.length?cand[0][F.id]:null,sure:!!sure,qty:Math.max(1,parseInt(g(row,'qty'),10)||1),cost:num(g(row,'cost')),lang:LANG_MAP[lr]||(lr?'Andere':'DE'),
+      cond:CONDS.find(c=>norm(c)===norm(cond))||(cand[0]&&!isSingle(cand[0])?'Versiegelt':'NM'),rh:/^(1|ja|yes|x|true|reverse)$/i.test(g(row,'rh'))}; });
+  renderImport();
+}
+function renderImport(){
+  const L=IMP; if(!L){ $('imp-result').innerHTML=''; return; } const ok=L.filter(x=>x.pick!=null).length;
+  $('imp-result').innerHTML=`<p><b>${L.length}</b> Zeilen: <span class="up">${L.filter(x=>x.pick!=null&&x.sure).length} eindeutig</span>, <span style="color:var(--accent)">${L.filter(x=>x.pick!=null&&!x.sure).length} bitte prüfen</span>, <span class="down">${L.filter(x=>x.pick==null).length} nicht gefunden</span>.</p>
+  <div class="tablewrap"><table><thead><tr><th>Deine Zeile</th><th>Zuordnung</th><th>Menge</th><th>EK</th></tr></thead><tbody>
+  ${L.map((x,i)=>`<tr><td>${esc([x.rec.name||('ID '+x.rec.id),x.rec.set,x.rec.nr&&('#'+x.rec.nr)].filter(Boolean).join(' · '))}</td>
+    <td>${x.cand.length?`<select class="field" data-imp="${i}" style="max-width:360px">${x.cand.map(c=>`<option value="${c[F.id]}"${c[F.id]===x.pick?' selected':''}>${esc(pName(c))} · ${esc(pSet(c))}${c[F.nr]?' #'+esc(c[F.nr]):''}${c[F.ver]?' V'+c[F.ver]:''} · ${eur.format(c[F.trend]??c[F.low])}</option>`).join('')}<option value="">Nicht importieren</option></select> ${x.sure?'<span class="up">✓</span>':'<span style="color:var(--accent)">prüfen</span>'}`:'<span class="down">nicht gefunden</span>'}</td>
+    <td class="num">${x.qty}</td><td class="num">${x.cost!=null?eur.format(x.cost):'–'}</td></tr>`).join('')}</tbody></table></div>
+  <div class="acts"><button type="button" class="btn primary" id="imp-go"${ok?'':' disabled'}>${ok} Karten einkleben</button><button type="button" class="btn" id="imp-cancel">Verwerfen</button></div>`;
+  $('imp-result').querySelectorAll('[data-imp]').forEach(s=>s.onchange=()=>{ const x=L[+s.dataset.imp]; x.pick=s.value?+s.value:null; x.sure=true; renderImport(); });
+  $('imp-go').onclick=async()=>{ let n=0, slot=Math.max(-1,...ST.positions.map(x=>x.slot??0))+1; const now=new Date().toISOString();
+    for(const x of L){ if(x.pick==null) continue; ST.positions.push({k:'p'+Date.now().toString(36)+n, id:x.pick, qty:x.qty, cost:x.cost, lang:x.lang, cond:x.cond, rh:x.rh, note:'Import', added:now, slot:slot++}); n++; }
+    IMP=null; $('imp-text').value=''; save(); await loadHistoryFor(ST.positions.map(p=>p.id)); renderAll(); renderImport(); setView('mappe'); toast(n+' Karten eingeklebt'); };
+  $('imp-cancel').onclick=()=>{ IMP=null; renderImport(); };
+}
+function download(name,data,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); }
+function toCSV(){ const q=s=>{ s=String(s??''); return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const L=['Cardmarket-ID;Name;Name EN;Set;Nummer;Menge;Einkauf;Sprache;Zustand;Reverse;Notiz;Trend;Wert'];
+  for(const p of ST.positions){ const r=prod(p.id); L.push([p.id,r?pName(r):'',r?r[F.en]:'',r?pSet(r):'',r?r[F.nr]:'',p.qty,p.cost!=null?String(p.cost).replace('.',','):'',p.lang,p.cond,p.rh?'ja':'',p.note,
+    r?String(basePrice(r,p.rh)).replace('.',','):'',r?(unitValue(r,p)*p.qty).toFixed(2).replace('.',','):''].map(q).join(';')); }
+  return '﻿'+L.join('\r\n'); }
+const today=()=>new Date().toISOString().slice(0,10);
+
+/* ================= Ereignisse ================= */
+document.querySelectorAll('nav.views button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+$('fab').onclick=()=>{ if(!CAT) return toast('Preise laden noch …'); openAdd(); };
+$('binder').addEventListener('click',e=>{ const a=e.target.closest('[data-add]'); if(a){ $('fab').click(); return; } const p=e.target.closest('.pocket[data-k]'); if(p) openDetail(p.dataset.k); });
+$('l-rows').addEventListener('click',e=>{ const r=e.target.closest('.lrow'); if(r) openDetail(r.dataset.k); });
+$('pg-prev').onclick=()=>{ UI.page--; renderBinder(); }; $('pg-next').onclick=()=>{ UI.page++; renderBinder(); };
+let tx=null; $('binder').addEventListener('touchstart',e=>{ tx=e.touches[0].clientX; },{passive:true});
+$('binder').addEventListener('touchend',e=>{ if(tx==null) return; const dx=e.changedTouches[0].clientX-tx; tx=null; if(Math.abs(dx)>60){ if(dx<0&&!$('pg-next').disabled) $('pg-next').click(); if(dx>0&&!$('pg-prev').disabled) $('pg-prev').click(); } });
+$('m-order').querySelectorAll('button').forEach(b=>b.onclick=()=>{ UI.order=b.dataset.o; UI.page=0; $('m-order').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderBinder(); });
+$('l-q').oninput=e=>{ UI.lq=e.target.value; renderList(); }; $('l-sort').onchange=e=>{ UI.lsort=e.target.value; renderList(); };
+for(const [id,key] of [['s-margin','margin'],['s-th','th'],['s-de','de'],['s-jp','jp']]) $(id).addEventListener('input',e=>{ ST.settings[key]=+e.target.value; save(); renderAll(); });
+$('imp-check').onclick=checkImport; $('imp-tpl').onclick=()=>{ $('imp-text').value=$('tpl').textContent; };
+$('imp-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; $('imp-text').value=await f.text(); e.target.value=''; checkImport(); };
+$('bk-save').onclick=()=>{ download(`preisradar-sicherung-${today()}.json`, JSON.stringify({app:'preisradar',version:1,saved:new Date().toISOString(),...ST},null,1),'application/json'); toast('Sicherung heruntergeladen'); };
+$('bk-csv').onclick=()=>{ download(`preisradar-mappe-${today()}.csv`, toCSV(), 'text/csv'); };
+$('bk-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; e.target.value=''; try{ const s=JSON.parse(await f.text()); if(s.app!=='preisradar'||!Array.isArray(s.positions)) throw 0;
+  $('bk-confirm').innerHTML=`<div class="notice warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Sicherung mit ${s.positions.length} Karten vom ${dLong(String(s.saved).slice(0,10))} gefunden. <button class="btn" id="bk-merge">Hinzufügen</button><button class="btn danger" id="bk-replace">Mappe ersetzen</button></div>`;
+  const apply=async rep=>{ const ex=new Set(ST.positions.map(p=>p.k)); ST.positions = rep ? s.positions.map(p=>({...p,photo:null})) : [...ST.positions, ...s.positions.filter(p=>!ex.has(p.k)).map(p=>({...p,photo:null}))]; if(rep) ST.settings={...DEFAULT_SETTINGS,...s.settings};
+    save(); $('bk-confirm').innerHTML=''; await loadHistoryFor(ST.positions.map(p=>p.id)); renderAll(); toast('Sicherung eingespielt'); };
+  $('bk-merge').onclick=()=>apply(false); $('bk-replace').onclick=()=>apply(true);
+}catch(err){ toast('Das ist keine Preisradar-Sicherung'); } };
+$('bk-clear').onclick=()=>{ $('bk-confirm').innerHTML=`<div class="notice warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Alle ${ST.positions.length} Karten und Fotos werden von diesem Gerät gelöscht. <button class="btn danger" id="bk-yes">Ja, leeren</button><button class="btn" id="bk-no">Abbrechen</button></div>`;
+  $('bk-yes').onclick=async()=>{ for(const p of ST.positions) if(p.photo) await idbDel('photos',p.photo); ST.positions=[]; save(); $('bk-confirm').innerHTML=''; renderAll(); toast('Mappe geleert'); };
+  $('bk-no').onclick=()=>{ $('bk-confirm').innerHTML=''; }; };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(renderBinder,150); });
+
+(async()=>{ await initStore(); renderSettings(); await preloadPhotos(); await loadCatalog(); })();
+</script>
+</body>
+</html>
