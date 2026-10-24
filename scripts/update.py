@@ -18,11 +18,18 @@ KEEP_DAYS = 400
 MAX_TCGDEX_FETCH = 2500
 
 
-def get_json(url, retries=4, timeout=90):
+def get_json(url, retries=4, timeout=90, fresh=False):
+    """fresh=True: CloudFront-Zwischenspeicher umgehen (Cardmarket-Dateien liegen hinter CloudFront,
+    ohne Cache-Busting kam am 23.10. noch die Datei vom 22.10. zurück)."""
     last = None
     for i in range(retries):
         try:
-            req = urllib.request.Request(url, headers=UA)
+            u = url
+            headers = dict(UA)
+            if fresh:
+                u = url + ('&' if '?' in url else '?') + 'nocache=' + str(int(time.time() * 1000)) + str(i)
+                headers.update({'Cache-Control': 'no-cache', 'Pragma': 'no-cache'})
+            req = urllib.request.Request(u, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode('utf-8'))
         except Exception as e:  # noqa
@@ -233,9 +240,18 @@ def main():
     today = dt.datetime.now(dt.timezone.utc).date().isoformat()
 
     print('Lade Cardmarket …')
-    pg = get_json(CM + 'priceGuide/price_guide_6.json')
-    singles = get_json(CM + 'productList/products_singles_6.json')['products']
-    nonsingles = get_json(CM + 'productList/products_nonsingles_6.json')['products']
+    pg = None
+    for attempt in range(4):
+        cand = get_json(CM + 'priceGuide/price_guide_6.json', fresh=True)
+        if pg is None or cand['createdAt'] > pg['createdAt']:
+            pg = cand
+        age_h = (dt.datetime.now(dt.timezone.utc) - dt.datetime.strptime(pg['createdAt'], '%Y-%m-%dT%H:%M:%S%z')).total_seconds() / 3600
+        print(f'Versuch {attempt + 1}: Price Guide {pg["createdAt"]} ({age_h:.1f} h alt)')
+        if age_h < 30:
+            break
+        time.sleep(20)
+    singles = get_json(CM + 'productList/products_singles_6.json', fresh=True)['products']
+    nonsingles = get_json(CM + 'productList/products_nonsingles_6.json', fresh=True)['products']
     date = pg['createdAt'][:10]
     print('Price Guide', pg['createdAt'], len(pg['priceGuides']), 'Einträge')
 
