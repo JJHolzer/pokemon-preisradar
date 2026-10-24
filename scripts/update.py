@@ -57,6 +57,10 @@ def refresh_tcgdex(state, seed_path, today):
     path = os.path.join(state, 'tcgdex-de.json')
     db = load(path, None) or load(seed_path, {'cards': {}})
     cards = db['cards']
+    # Nur einmal am Tag bei TCGdex nachfragen (der Abruf läuft alle 3 Stunden)
+    if db.get('refreshed') == today:
+        print('TCGdex heute schon aktualisiert, überspringe')
+        return cards
     try:
         listing = get_json(TD + '/cards')
     except Exception as e:
@@ -85,7 +89,7 @@ def refresh_tcgdex(state, seed_path, today):
                 cards[cid] = row
             elif cid in cards:
                 cards[cid][7] = today
-    dump(path, {'fields': ['localId', 'name', 'rarity', 'setId', 'setName', 'idProduct', 'image', 'checked'], 'cards': cards})
+    dump(path, {'fields': ['localId', 'name', 'rarity', 'setId', 'setName', 'idProduct', 'image', 'checked'], 'cards': cards, 'refreshed': today})
     return cards
 
 
