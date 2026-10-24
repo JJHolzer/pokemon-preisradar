@@ -2,7 +2,7 @@ name: Preise aktualisieren
 
 on:
   schedule:
-    - cron: '23 4 * * *'   # täglich ca. 05:23 / 06:23 Uhr deutscher Zeit
+    - cron: '23 */3 * * *'   # alle 3 Stunden: Cardmarket schreibt nachts, kommt aber nicht immer pünktlich
   workflow_dispatch:
   push:
     branches: [main]
