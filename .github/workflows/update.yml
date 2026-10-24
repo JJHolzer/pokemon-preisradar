@@ -28,11 +28,20 @@ jobs:
 
       - name: Gespeicherten Stand holen (Branch daten)
         run: |
-          if git ls-remote --exit-code --heads origin daten >/dev/null; then
+          set +e
+          git ls-remote --exit-code --heads origin daten >/dev/null
+          rc=$?
+          set -e
+          if [ "$rc" = "0" ]; then
             git fetch --depth=1 origin daten
             git worktree add state FETCH_HEAD
-          else
+            test -d state/history || { echo "Branch daten ohne history – Abbruch, damit nichts überschrieben wird"; exit 1; }
+          elif [ "$rc" = "2" ]; then
+            echo "Branch daten existiert noch nicht – erster Lauf"
             mkdir -p state
+          else
+            echo "git ls-remote fehlgeschlagen (rc=$rc) – Abbruch, damit der Verlauf nicht verloren geht"
+            exit 1
           fi
 
       - uses: actions/setup-python@v5

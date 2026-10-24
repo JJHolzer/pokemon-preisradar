@@ -429,13 +429,17 @@ function openDB(){ return new Promise(res=>{ try{ const q=indexedDB.open('preisr
 function idbGet(store,key){ return new Promise(res=>{ if(!idb) return res(null); try{ const t=idb.transaction(store).objectStore(store).get(key); t.onsuccess=()=>res(t.result??null); t.onerror=()=>res(null);}catch(e){res(null);} }); }
 function idbPut(store,key,val){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).put(val,key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
 function idbDel(store,key){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
-function normState(s){ const st={positions:Array.isArray(s?.positions)?s.positions:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; if(!st.settings.v3){ st.settings.basis='market'; st.settings.v3=true; } return st; }
+function normState(s){ const st={savedAt:s?.savedAt||0, positions:Array.isArray(s?.positions)?s.positions:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; if(!st.settings.v3){ st.settings.basis='market'; st.settings.v3=true; } return st; }
 let saveT=null;
-function save(){ clearTimeout(saveT); saveT=setTimeout(async()=>{ const json=JSON.parse(JSON.stringify(ST)); await idbPut('kv','state',json); try{ localStorage.setItem(LS,JSON.stringify(json)); }catch(e){} },300); }
+async function saveNow(){ clearTimeout(saveT); saveT=null; ST.savedAt=Date.now(); const json=JSON.parse(JSON.stringify(ST)); try{ localStorage.setItem(LS,JSON.stringify(json)); }catch(e){} await idbPut('kv','state',json); }
+function save(){ clearTimeout(saveT); saveT=setTimeout(saveNow,300); }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'&&saveT) saveNow(); });
+window.addEventListener('pagehide',()=>{ if(saveT) saveNow(); });
 async function initStore(){
   idb=await openDB();
-  let s=await idbGet('kv','state');
-  if(!s){ try{ s=JSON.parse(localStorage.getItem(LS)||'null'); }catch(e){} }
+  let s=await idbGet('kv','state'), l=null;
+  try{ l=JSON.parse(localStorage.getItem(LS)||'null'); }catch(e){}
+  if(!s || (l && (l.savedAt||0) > (s.savedAt||0))) s=l;
   ST=normState(s);
   try{ if(navigator.storage?.persist) await navigator.storage.persist(); }catch(e){}
   if(!idb){ $('storeNote').hidden=false; $('storeNote').innerHTML='<b>Speichern eingeschränkt.</b> Dieser Browser erlaubt keine dauerhafte Ablage (z. B. privates Fenster). Fotos werden nicht gespeichert, sichere die Mappe unter „Import &amp; Sicherung“.'; }
@@ -452,10 +456,10 @@ function metrics(r){
   const back=k=>{ if(n<2) return null; const target=new Date(h.dates[n-1]); target.setUTCDate(target.getUTCDate()-k); const t=target.toISOString().slice(0,10);
     for(let i=n-1;i>=0;i--) if(h.dates[i]<=t) return v[i]; return null; };
   const v7=back(7), v30=back(30);
-  const d7 = v7!=null ? trend/v7-1 : (!low&&r[F.avg7] ? trend/r[F.avg7]-1 : null);
-  const d7src = v7!=null ? 'Verlauf' : (!low&&r[F.avg7]?'Ø7':null);
-  const d30 = v30!=null ? trend/v30-1 : ((mk||!low)&&r[F.avg30] ? trend/r[F.avg30]-1 : null);
-  const d30src = v30!=null ? 'Verlauf' : ((mk||!low)&&r[F.avg30]?'Ø30':null);
+  const d7 = v7 ? trend/v7-1 : (!low&&r[F.avg7] ? trend/r[F.avg7]-1 : null);
+  const d7src = v7 ? 'Verlauf' : (!low&&r[F.avg7]?'Ø7':null);
+  const d30 = v30 ? trend/v30-1 : ((mk||!low)&&r[F.avg30] ? trend/r[F.avg30]-1 : null);
+  const d30src = v30 ? 'Verlauf' : ((mk||!low)&&r[F.avg30]?'Ø30':null);
   const ref30 = (n>=7 ? v.slice(-30).reduce((s,x)=>s+x,0)/Math.min(30,n) : ((mk||!low) ? r[F.avg30] : null));
   const max = n ? Math.max(...v) : null, maxI = n ? v.indexOf(max) : -1;
   const sig=[]; const th=ST.settings.th/100;
@@ -508,8 +512,9 @@ function rowsData(){ return ST.positions.map(p=>{ const r=prod(p.id); if(!r) ret
 function renderKpis(list){
   let val=0,cost=0,cv=0,n=0,sig=0; for(const x of list){ if(!x.r) continue; val+=x.val; n+=x.p.qty; if(x.cost!=null){cost+=x.cost;cv+=x.val;} if(x.m.sig.length) sig++; }
   $('k-value').textContent=eur0.format(val); $('k-items').textContent=n+' Stück · '+list.length+' Hüllen belegt';
-  $('k-cost').textContent=cost?eur0.format(cost):'–'; const pl=cv-cost, k=$('k-pl'); k.textContent=cost?(pl>=0?'+':'−')+eur0.format(Math.abs(pl)):'–'; k.className='val '+(cost?cls(pl):'');
-  $('k-plpct').textContent=cost?pct(pl/cost)+' auf Karten mit Einkaufspreis':'Einkaufspreise eintragen'; $('k-sig').textContent=sig+' von '+list.length;
+  const anyCost=list.some(x=>x.r&&x.cost!=null);
+  $('k-cost').textContent=anyCost?eur0.format(cost):'–'; const pl=cv-cost, k=$('k-pl'); k.textContent=anyCost?(pl>=0?'+':'−')+eur0.format(Math.abs(pl)):'–'; k.className='val '+(anyCost?cls(pl):'');
+  $('k-plpct').textContent=anyCost?(cost>0?pct(pl/cost)+' auf Karten mit Einkaufspreis':'Einkauf 0 €, alles Gewinn'):'Einkaufspreise eintragen'; $('k-sig').textContent=sig+' von '+list.length;
 }
 function sortedList(){
   const L=rowsData();
@@ -531,9 +536,9 @@ function renderBinder(){
     for(let s=0;s<9;s++){
       const i=pi*9+s, x=L[i];
       if(!x){ html+= i===L.length ? `<button type="button" class="pocket empty" data-add aria-label="Karte einkleben">+<span>Karte einkleben</span></button>` : `<div class="pocket empty" aria-hidden="true"></div>`; continue; }
-      if(!x.r){ html+=`<button type="button" class="pocket" data-k="${x.p.k}"><div class="ph"><b>Produkt ${x.p.id}</b><small>nicht mehr im Katalog</small></div></button>`; continue; }
+      if(!x.r){ html+=`<button type="button" class="pocket" data-k="${esc(x.p.k)}"><div class="ph"><b>Produkt ${esc(x.p.id)}</b><small>nicht mehr im Katalog</small></div></button>`; continue; }
       const ph = x.p.photo && !x.r[F.img] ? photoURLs.get(x.p.photo) : null;
-      html+=`<button type="button" class="pocket${UI.fresh===x.p.k?' fresh':''}" data-k="${x.p.k}" aria-label="${esc(pName(x.r))}, ${eur.format(x.unit)}">
+      html+=`<button type="button" class="pocket${UI.fresh===x.p.k?' fresh':''}" data-k="${esc(x.p.k)}" aria-label="${esc(pName(x.r))}, ${eur.format(x.unit)}">
         ${cardImg(x.r,'low',ph)}${x.p.qty>1?`<span class="qty">${x.p.qty}×</span>`:''}${x.m.sig.length?'<span class="sigdot" title="Signal"></span>':''}
         <span class="price"><span>${x.unit>=1000?eur0.format(x.unit):eur.format(x.unit)}</span>${x.m.d7!=null?`<span class="c ${cls(x.m.d7)}">${pct(x.m.d7).replace(' %','%')}</span>`:''}</span></button>`;
     }
@@ -549,8 +554,8 @@ function renderList(){
   let L=rowsData().filter(x=>!q||(x.r&&q.split(' ').every(t=>HAY[IDX.get(x.r[F.id])].includes(t))));
   const S={value:(a,b)=>(b.val||0)-(a.val||0),pl:(a,b)=>((b.cost?b.val/b.cost:-9)-(a.cost?a.val/a.cost:-9)),chg:(a,b)=>((b.m?.d7??-9)-(a.m?.d7??-9)),name:(a,b)=>(a.r?pName(a.r):'').localeCompare(b.r?pName(b.r):'','de')};
   L.sort(S[UI.lsort]);
-  $('l-rows').innerHTML = L.length ? L.map(x=>{ if(!x.r) return ''; const gv=x.cost!=null?(x.val-x.cost)/x.cost:null;
-    return `<button type="button" class="lrow" data-k="${x.p.k}"><div class="th">${cardImg(x.r,'low',x.p.photo&&!x.r[F.img]?photoURLs.get(x.p.photo):null)}</div>
+  $('l-rows').innerHTML = L.length ? L.map(x=>{ if(!x.r) return ''; const gv=x.cost?(x.val-x.cost)/x.cost:null;
+    return `<button type="button" class="lrow" data-k="${esc(x.p.k)}"><div class="th">${cardImg(x.r,'low',x.p.photo&&!x.r[F.img]?photoURLs.get(x.p.photo):null)}</div>
       <div class="nm"><div class="t">${esc(pName(x.r))}</div><div class="s">${pSub(x.r)} <span class="tag">${esc(x.p.lang)}</span></div></div>
       <div class="r c-chg"><span class="pr ${cls(x.m.d7)}">${x.m.d7!=null?pct(x.m.d7):'–'}</span><div class="muted" style="font-size:11px">7 Tage</div></div>
       <div class="r c-qty pr">${x.p.qty}×</div>
@@ -588,10 +593,10 @@ function chartHTML(h){
 UI.range=30;
 async function openDetail(k){
   const p=posBy(k); if(!p) return; const r=prod(p.id);
-  if(!r){ openModal(`<div class="addwrap"><h2>Produkt ${p.id}</h2><p>Dieses Produkt ist nicht mehr im Cardmarket-Katalog.</p><div class="acts"><button class="btn danger" id="d-del">Aus der Mappe entfernen</button></div></div>`); $('d-del').onclick=()=>removePos(p); return; }
+  if(!r){ openModal(`<div class="addwrap"><h2>Produkt ${esc(p.id)}</h2><p>Dieses Produkt ist nicht mehr im Cardmarket-Katalog.</p><div class="acts"><button class="btn danger" id="d-del">Aus der Mappe entfernen</button></div></div>`); $('d-del').onclick=()=>removePos(p); return; }
   const h=await historyAsync(r[F.id]); const m=metrics(r); const unit=unitValue(r,p), lf=langFactor(p.lang);
   const photo=p.photo?await photoURL(p.photo):null; let showPhoto=!r[F.img]&&!!photo;
-  const gv=p.cost!=null?(()=>{ const cost=p.cost*p.qty, v=unit*p.qty, pl=v-cost; return `<div class="line"><span>Gewinn / Verlust</span><span class="num ${cls(pl)}">${pl>=0?'+':'−'}${eur.format(Math.abs(pl))} (${pct(pl/cost)})</span></div>`; })():'';
+  const gv=p.cost!=null?(()=>{ const cost=p.cost*p.qty, v=unit*p.qty, pl=v-cost; return `<div class="line"><span>Gewinn / Verlust</span><span class="num ${cls(pl)}">${pl>=0?'+':'−'}${eur.format(Math.abs(pl))} ${cost>0?' ('+pct(pl/cost)+')':''}</span></div>`; })():'';
   const html=`<div class="dgrid">
     <div class="dimg"><div class="card" id="d-card">${cardImg(r,'high',showPhoto?photo:null)}</div>
       ${photo&&r[F.img]?`<div class="toggle" id="d-pt"><button type="button" data-p="0" aria-pressed="true">Offizielles Bild</button><button type="button" data-p="1" aria-pressed="false">Dein Foto</button></div>`:''}</div>
@@ -755,7 +760,7 @@ function openAdd(){
       <label for="a-cam"><b>Foto oder Screenshot</b><span>Karte gerade und hell ins Bild, Name oben und Nummer unten müssen lesbar sein. Für Displays, ETBs und Boxen: Foto der Verpackung oder Screenshot der Cardmarket-Seite.</span></label>
       <button type="button" id="a-search-go"><b>Suchen</b><span>Name (deutsch oder englisch), Set oder Nummer, auch für Displays, ETBs und andere versiegelte Produkte.</span></button>
     </div>
-    <input type="file" id="a-cam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="a-cam" accept="image/*" hidden>
     <div id="a-body"></div></div>`);
   $('a-cam').onchange=e=>{ const f=e.target.files[0]; if(f){ UI.keepPhoto=true; runPhoto(f); } };
   $('a-search-go').onclick=()=>showSearch('',null);
@@ -825,7 +830,7 @@ function parseCSV(text){ text=text.replace(/^﻿/,'').trim(); if(!text) return [
     else if(c==='"') q=true; else if(c===delim){row.push(cur);cur='';} else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(cur); rows.push(row); row=[]; cur=''; } else cur+=c; }
   row.push(cur); rows.push(row); return rows.filter(r=>r.some(x=>x.trim())); }
 const COLS={id:/^(cardmarket ?id|idproduct|id|produkt ?id)$/,name:/^(name|karte|kartenname|card|card name|produkt|product)$/,set:/^(set|edition|erweiterung|expansion|serie)$/,nr:/^(nr|nummer|number|no|kartennummer|card number)$/,
-  qty:/^(menge|anzahl|qty|quantity|stuck|stk|count)$/,cost:/^(einkauf|ek|einkaufspreis|preis|price|kaufpreis|purchase price|cost)$/,lang:/^(sprache|language|lang)$/,cond:/^(zustand|condition|cond)$/,rh:/^(reverse|reverse holo|rh)$/};
+  qty:/^(menge|anzahl|qty|quantity|stuck|stk|count)$/,cost:/^(einkauf|ek|einkaufspreis|preis|price|kaufpreis|purchase price|cost)$/,lang:/^(sprache|language|lang)$/,cond:/^(zustand|condition|cond)$/,rh:/^(reverse|reverse holo|rh)$/,note:/^(notiz|note|notes|bemerkung|kommentar)$/};
 const LANG_MAP={de:'DE',deutsch:'DE',german:'DE',en:'EN',englisch:'EN',english:'EN',jp:'JP',ja:'JP',japanisch:'JP',japanese:'JP'};
 function num(s){ s=String(s??'').replace(/[€\s]/g,''); if(!s) return null; if(/,\d{1,2}$/.test(s)) s=s.replace(/\./g,'').replace(',','.'); else s=s.replace(/,/g,''); const v=parseFloat(s); return isNaN(v)?null:v; }
 function candidates(rec){
@@ -847,7 +852,7 @@ function checkImport(){
   IMP=rows.slice(1).map(row=>{ const rec={id:g(row,'id').replace(/\D/g,''),name:g(row,'name'),set:g(row,'set'),nr:g(row,'nr')}; const cand=candidates(rec);
     const sure=cand.length&&(rec.id||cand.length===1||(cand[0]._s-(cand[1]?._s??-999)>=40)); const lr=norm(g(row,'lang')), cond=g(row,'cond');
     return {rec,cand,pick:cand.length?cand[0][F.id]:null,sure:!!sure,qty:Math.max(1,parseInt(g(row,'qty'),10)||1),cost:num(g(row,'cost')),lang:LANG_MAP[lr]||(lr?'Andere':'DE'),
-      cond:CONDS.find(c=>norm(c)===norm(cond))||(cand[0]&&!isSingle(cand[0])?'Versiegelt':'NM'),rh:/^(1|ja|yes|x|true|reverse)$/i.test(g(row,'rh'))}; });
+      cond:CONDS.find(c=>norm(c)===norm(cond))||(cand[0]&&!isSingle(cand[0])?'Versiegelt':'NM'),rh:/^(1|ja|yes|x|true|reverse)$/i.test(g(row,'rh')), note:g(row,'note')}; });
   renderImport();
 }
 function renderImport(){
@@ -890,7 +895,12 @@ $('bk-save').onclick=()=>{ download(`preisradar-sicherung-${today()}.json`, JSON
 $('bk-csv').onclick=()=>{ download(`preisradar-mappe-${today()}.csv`, toCSV(), 'text/csv'); };
 $('bk-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; e.target.value=''; try{ const s=JSON.parse(await f.text()); if(s.app!=='preisradar'||!Array.isArray(s.positions)) throw 0;
   $('bk-confirm').innerHTML=`<div class="notice warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Sicherung mit ${s.positions.length} Karten vom ${dLong(String(s.saved).slice(0,10))} gefunden. <button class="btn" id="bk-merge">Hinzufügen</button><button class="btn danger" id="bk-replace">Mappe ersetzen</button></div>`;
-  const apply=async rep=>{ const ex=new Set(ST.positions.map(p=>p.k)); ST.positions = rep ? s.positions.map(p=>({...p,photo:null})) : [...ST.positions, ...s.positions.filter(p=>!ex.has(p.k)).map(p=>({...p,photo:null}))]; if(rep) ST.settings={...DEFAULT_SETTINGS,...s.settings};
+  const clean=async (p,i)=>{ const id=parseInt(p.id,10); if(!id) return null; const key=typeof p.photo==='string'&&/^ph[a-z0-9]+$/.test(p.photo)&&await idbGet('photos',p.photo)?p.photo:null;
+    return {k:/^p[a-z0-9]+$/.test(p.k)?p.k:'p'+Date.now().toString(36)+'r'+i, id, qty:Math.max(1,parseInt(p.qty,10)||1), cost:p.cost==null||p.cost===''?null:(Number.isFinite(+p.cost)?Math.max(0,+p.cost):null),
+      lang:LANGS.includes(p.lang)?p.lang:'DE', cond:CONDS.includes(p.cond)?p.cond:'NM', rh:!!p.rh, note:String(p.note??'').slice(0,300), added:String(p.added??''), slot:Number.isFinite(+p.slot)?+p.slot:i, photo:key}; };
+  const apply=async rep=>{ const incoming=(await Promise.all(s.positions.map(clean))).filter(Boolean); const ex=new Set(ST.positions.map(p=>p.k));
+    ST.positions = rep ? incoming : [...ST.positions, ...incoming.filter(p=>!ex.has(p.k))];
+    if(rep){ const st=s.settings||{}; ST.settings={...DEFAULT_SETTINGS}; for(const k of ['margin','th','de','jp']) if(Number.isFinite(+st[k])) ST.settings[k]=+st[k]; if(['market','low','trend'].includes(st.basis)) ST.settings.basis=st.basis; ST.settings.v3=true; }
     save(); $('bk-confirm').innerHTML=''; await loadHistoryFor(ST.positions.map(p=>p.id)); renderAll(); toast('Sicherung eingespielt'); };
   $('bk-merge').onclick=()=>apply(false); $('bk-replace').onclick=()=>apply(true);
 }catch(err){ toast('Das ist keine Preisradar-Sicherung'); } };
@@ -904,7 +914,8 @@ let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(r
 function importFromHash(){
   const m=location.hash.match(/^#import=(.+)$/); if(!m||!CAT) return;
   history.replaceState(null,'',location.pathname+location.search);
-  const rows=m[1].split(',').map(e=>e.split('*').map(x=>decodeURIComponent(x||'')));
+  let rows; try{ rows=m[1].split(',').map(e=>e.split('*').map(x=>decodeURIComponent(x||''))).filter(r=>parseInt(r[0],10)); }catch(e){ toast('Der Import-Link ist beschädigt',4000); return; }
+  if(!rows.length){ toast('Der Import-Link enthält keine Karten',4000); return; }
   IMP=rows.map(([id,qty,lang,cond,cost,note])=>{ const r=prod(+id);
     return {rec:{id, name:r?pName(r):'ID '+id, set:r?pSet(r):'', nr:r?r[F.nr]:''}, cand:r?[r]:[], pick:r?r[F.id]:null, sure:!!r,
       qty:Math.max(1,parseInt(qty,10)||1), cost:cost?num(cost):null, lang:LANGS.includes(lang)?lang:'DE', cond:CONDS.includes(cond)?cond:(r&&!isSingle(r)?'Versiegelt':'NM'), rh:false, note}; });

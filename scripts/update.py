@@ -204,7 +204,7 @@ def update_history(state, catalog, date):
             sh['v'][str(r[0])] = int(round(r[8] * 100))
         if r[9] is not None:
             sh['l'][str(r[0])] = int(round(r[9] * 100))
-        mk = r[12] if r[12] is not None else r[8]
+        mk = r[12] if (r[6] == 'S' and r[12] is not None) else r[8]
         if mk is not None:
             sh['m'][str(r[0])] = int(round(mk * 100))
     d = dt.date.fromisoformat(date)
@@ -254,6 +254,19 @@ def main():
         if age_h < 30:
             break
         time.sleep(20)
+    prev = load(os.path.join(a.state, 'meta.json'), {})
+    if prev.get('createdAt') and pg['createdAt'] < prev['createdAt'] and os.path.exists(os.path.join(a.state, 'katalog.json')):
+        print(f'Geladene Preisliste {pg["createdAt"]} ist älter als der gespeicherte Stand {prev["createdAt"]} – behalte den gespeicherten Katalog')
+        if os.path.exists(a.site):
+            shutil.rmtree(a.site)
+        shutil.copytree(os.path.join(a.root, 'web'), a.site)
+        os.makedirs(os.path.join(a.site, 'data'), exist_ok=True)
+        shutil.copy(os.path.join(a.state, 'katalog.json'), os.path.join(a.site, 'data', 'katalog.json'))
+        prev['built'] = dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
+        dump(os.path.join(a.site, 'data', 'meta.json'), prev)
+        shutil.copytree(os.path.join(a.state, 'history'), os.path.join(a.site, 'data', 'h'))
+        open(os.path.join(a.site, '.nojekyll'), 'w').close()
+        return 0
     singles = get_json(CM + 'productList/products_singles_6.json', fresh=True)['products']
     nonsingles = get_json(CM + 'productList/products_nonsingles_6.json', fresh=True)['products']
     date = pg['createdAt'][:10]
@@ -278,6 +291,7 @@ def main():
         shutil.rmtree(a.site)
     shutil.copytree(os.path.join(a.root, 'web'), a.site)
     dump(os.path.join(a.site, 'data', 'katalog.json'), cat)
+    dump(os.path.join(a.state, 'katalog.json'), cat)
     dump(os.path.join(a.site, 'data', 'meta.json'), meta)
     shutil.copytree(os.path.join(a.state, 'history'), os.path.join(a.site, 'data', 'h'))
     open(os.path.join(a.site, '.nojekyll'), 'w').close()
