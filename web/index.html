@@ -321,7 +321,7 @@ Surging Sparks Booster Box;;;2;165;;Versiegelt</pre>
       <h2>Einstellungen</h2>
       <div class="grid2">
         <div class="set"><label for="s-margin"><span>Verkaufspreis gegenüber Trend</span><span class="num" id="s-margin-v"></span></label><input id="s-margin" type="range" min="-20" max="20" step="1"><p>Grundlage für den Preisvorschlag auf Vinted oder Kleinanzeigen.</p></div>
-        <div class="set"><label for="s-th"><span>Signal ab Abweichung zum 30-Tage-Schnitt</span><span class="num" id="s-th-v"></span></label><input id="s-th" type="range" min="5" max="30" step="1"><p>Liegt der Preis so weit darüber oder darunter, bekommt die Karte einen gelben Punkt.</p></div>
+        <div class="set"><label for="s-th"><span>Signal ab Abweichung zum 30-Tage-Schnitt</span><span class="num" id="s-th-v"></span></label><input id="s-th" type="range" min="5" max="30" step="1"><p>Liegt der Preis so weit darüber oder darunter, bekommt die Karte einen gelben Punkt. Karten unter 2 € bekommen kein Signal.</p></div>
         <div class="set"><label for="s-de"><span>Abschlag für deutsche Karten</span><span class="num" id="s-de-v"></span></label><input id="s-de" type="range" min="0" max="50" step="1"><p>Cardmarket führt einen Preis pro Karte über alle Sprachen. Deutsche Karten erzielen oft weniger. Trag deine Erfahrung ein.</p></div>
         <div class="set"><label for="s-jp"><span>Abschlag für japanische und andere Sprachen</span><span class="num" id="s-jp-v"></span></label><input id="s-jp" type="range" min="0" max="60" step="1"><p>Gilt für alle Karten, die nicht Deutsch oder Englisch sind.</p></div>
       </div>
@@ -350,6 +350,7 @@ const dLong = s => s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4);
 function toast(msg,ms=2600){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,ms); }
 const RAR={'Selten, besondere Illustration':'SIR','Selten, Illustration':'IR','Ultra Selten':'UR','Hyperselten':'HR','Doppelselten':'RR','Versteckt Selten':'Secret','Mega Hyper Selten':'MHR','Holografisch Selten':'Holo','Häufig':'C','Ungewöhnlich':'U','Selten':'R','Promo':'Promo'};
 const CAT_DE={'Booster':'Booster','Display':'Display','Elite Trainer Boxes':'Elite Trainer Box','Box Set':'Kollektion','Tins':'Tin','Blisters':'Blister','Theme Decks':'Themendeck','Trainer Kits':'Trainer-Kit','Coins':'Münze','Lot':'Lot','PCG Set':'Set'};
+const CAT_SYN={'Elite Trainer Boxes':'Top Trainer Box ETB TTB','Display':'Booster Display Booster Box 36er','Box Set':'Kollektion Box Collection','Tins':'Tin Dose','Blisters':'Blister','Booster':'Boosterpack Pack'};
 const LANGS=['DE','EN','JP','Andere'], CONDS=['NM','EX','GD','LP','PL','Versiegelt'];
 
 /* ================= Katalog ================= */
@@ -393,7 +394,7 @@ async function loadCatalog(){
     META=m; CAT=c;
   }catch(e){ $('stamp').textContent='Preise nicht erreichbar'; $('binder').innerHTML='<div class="loading">Die Preisdaten konnten nicht geladen werden. Prüf die Internetverbindung und lade neu.</div>'; return; }
   IDX=new Map(CAT.rows.map((r,i)=>[r[F.id],i]));
-  HAY=CAT.rows.map(r=>norm([r[F.de],r[F.en],(CAT.sets[r[F.exp]]||{}).n,r[F.nr],r[F.rar],isSingle(r)?'':(CAT_DE[r[F.cat]]||r[F.cat])].join(' ')));
+  HAY=CAT.rows.map(r=>norm([r[F.de],r[F.en],(CAT.sets[r[F.exp]]||{}).n,r[F.nr],r[F.rar],isSingle(r)?'':(CAT_DE[r[F.cat]]||r[F.cat]),isSingle(r)?'':(CAT_SYN[r[F.cat]]||'')].join(' ')));
   const d=new Date(CAT.createdAt.replace(/([+-]\d\d)(\d\d)$/,'$1:$2'));
   const built=META.built?new Date(META.built):null, ageH=(Date.now()-d.getTime())/36e5;
   const fmt=x=>x.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -462,7 +463,7 @@ function metrics(r){
   const d30src = v30 ? 'Verlauf' : ((mk||!low)&&r[F.avg30]?'Ø30':null);
   const ref30 = (n>=7 ? v.slice(-30).reduce((s,x)=>s+x,0)/Math.min(30,n) : ((mk||!low) ? r[F.avg30] : null));
   const max = n ? Math.max(...v) : null, maxI = n ? v.indexOf(max) : -1;
-  const sig=[]; const th=ST.settings.th/100;
+  const sig=[]; const th=ST.settings.th/100; if(trend<2) return {h,trend,d7,d7src,d30,d30src,max,maxI,sig};
   if(n>=14 && trend>=max*0.98) sig.push({c:'p-high',t:'Höchststand seit '+dShort(h.dates[0])});
   if(ref30){ const dev=trend/ref30-1; if(dev>=th) sig.push({c:'p-up',t:pct(dev)+' über Ø30'}); else if(dev<=-th) sig.push({c:'p-down',t:pct(dev)+' unter Ø30'}); }
   return {h,trend,d7,d7src,d30,d30src,max,maxI,sig};
@@ -605,7 +606,7 @@ async function openDetail(k){
       <div class="big"><span class="pr">${eur.format(m.trend)}</span><span class="muted" style="font-size:13px">${BASIS_LABEL(r)}</span>${m.sig.map(s=>`<span class="pill ${s.c}">${s.t}</span>`).join('')}</div>
       <div class="note" style="margin-top:-8px;font-size:13px">${[basis()!=='low'&&r[F.low]!=null?'Günstigstes Angebot '+eur.format(r[F.low]):'', basis()!=='market'&&isSingle(r)&&r[F.avg7]!=null?'Marktpreis '+eur.format(r[F.avg7]):'', basis()!=='trend'&&r[F.trend]!=null&&(basis()!=='market'||(isSingle(r)&&r[F.avg7]!=null))?'Trend '+eur.format(r[F.trend]):''].filter(Boolean).join(' · ')}</div>
       <div class="chips">
-        <div class="chip"><span class="k">7 Tage</span><span class="v ${cls(m.d7)}">${m.d7!=null?pct(m.d7):'–'}</span><span class="note">${m.d7src==='Ø7'?'ggü. Ø 7 Tage':m.d7src?'aus Verlauf':''}</span></div>
+        <div class="chip"><span class="k">7 Tage</span><span class="v ${cls(m.d7)}">${m.d7!=null?pct(m.d7):'–'}</span><span class="note">${m.d7src==='Ø7'?'ggü. Ø 7 Tage':m.d7src?'aus Verlauf':'ab 7 Tagen Verlauf'}</span></div>
         <div class="chip"><span class="k">30 Tage</span><span class="v ${cls(m.d30)}">${m.d30!=null?pct(m.d30):'–'}</span><span class="note">${m.d30src==='Ø30'?'ggü. Ø 30 Tage':m.d30src?'aus Verlauf':''}</span></div>
         <div class="chip"><span class="k">Höchster Wert</span><span class="v">${m.max!=null?eur.format(m.max):'–'}</span><span class="note">${m.maxI>=0?'am '+dShort(m.h.dates[m.maxI]):''}</span></div>
       </div>
@@ -793,7 +794,7 @@ function search(q,limit=36){
   const nq=norm(q), hits=[];
   for(let i=0;i<CAT.rows.length;i++){ const h=HAY[i]; let ok=true; for(const t of toks){ if(!h.includes(t)){ok=false;break;} } if(!ok) continue;
     const r=CAT.rows[i], nd=norm(r[F.de]), ne=norm(r[F.en]); let s=0; if(nd===nq||ne===nq) s+=100; else if(nd.startsWith(toks[0])||ne.startsWith(toks[0])) s+=40;
-    if(r[F.de]) s+=10; s+=Math.log10((r[F.trend]||0)+1)*5; hits.push([s,i]); }
+    if(r[F.de]) s+=10; s+=Math.log10((r[F.trend]||0)+1)*5; s-=norm(pName(r)).split(' ').length*4; hits.push([s,i]); }
   hits.sort((a,b)=>b[0]-a[0]); return hits.slice(0,limit).map(h=>CAT.rows[h[1]]);
 }
 function showSearch(q,file){
