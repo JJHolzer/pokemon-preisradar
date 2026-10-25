@@ -1,9 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2B632"/><stop offset="1" stop-color="#D18A0E"/></linearGradient></defs>
+<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A241F"/><stop offset="1" stop-color="#0F1512"/></linearGradient></defs>
 <rect width="512" height="512" fill="url(#g)"/>
-<g fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
-   <g transform="rotate(-7 256 256)">
+<g fill="none" stroke="#E8DFCC" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-7 256 256)">
    <rect x="176" y="146" width="160" height="220" rx="20"/>
-   <polyline points="206,312 240,276 268,296 306,236"/>
-   <polyline points="280,236 306,236 306,262"/>
-   </g></g></svg>
+   <polyline points="206,312 240,276 268,296 306,236" stroke="#8FAE8B"/>
+   <polyline points="280,236 306,236 306,262" stroke="#8FAE8B"/></g></g></svg>
