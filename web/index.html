@@ -129,7 +129,8 @@ img.ci{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .nm .s{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .r{text-align:right}
 .pr{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
-@media (max-width:640px){.lrow{grid-template-columns:40px minmax(0,1fr) auto}.lrow .c-chg,.lrow .c-qty{display:none}}
+.only-m{display:none}
+@media (max-width:640px){.lrow{grid-template-columns:40px minmax(0,1fr) auto}.lrow .c-chg,.lrow .c-qty{display:none}.only-m{display:block}}
 
 /* ---------- Dialoge ---------- */
 .scrim{position:fixed;inset:0;background:rgba(8,10,16,.55);z-index:30;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -220,6 +221,13 @@ th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mu
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90vw;text-align:center}
 .loading{padding:50px;text-align:center;color:var(--muted)}
 footer{font-size:12.5px;color:var(--muted);max-width:80ch}
+.wv{padding:0;gap:0}
+.wv summary{cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 16px;list-style:none}
+.wv summary::-webkit-details-marker{display:none}
+.wv summary b{font-family:var(--f-display);font-size:16px}
+.wv summary::after{content:"▾";color:var(--muted);margin-left:6px}
+.wv[open] summary::after{content:"▴"}
+#wv-body{padding:0 16px 14px;display:flex;flex-direction:column;gap:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -240,6 +248,7 @@ footer{font-size:12.5px;color:var(--muted);max-width:80ch}
 
   <nav class="views" role="tablist" aria-label="Bereiche">
     <button type="button" role="tab" data-v="mappe" aria-selected="true">Sammelmappe</button>
+    <button type="button" role="tab" data-v="verkauf" aria-selected="false">Verkaufsbuch</button>
     <button type="button" role="tab" data-v="liste" aria-selected="false">Liste</button>
     <button type="button" role="tab" data-v="import" aria-selected="false">Import &amp; Sicherung</button>
     <button type="button" role="tab" data-v="settings" aria-selected="false">Einstellungen</button>
@@ -247,7 +256,7 @@ footer{font-size:12.5px;color:var(--muted);max-width:80ch}
 
   <div id="storeNote" class="notice warn" hidden></div>
 
-  <section class="kpis" aria-label="Kennzahlen">
+  <section class="kpis" id="kpis" aria-label="Kennzahlen">
     <div class="kpi"><div class="lab">Wert der Mappe</div><div class="val" id="k-value">–</div><div class="sub" id="k-items">–</div></div>
     <div class="kpi"><div class="lab">Einkauf</div><div class="val" id="k-cost">–</div><div class="sub">Summe deiner Einkaufspreise</div></div>
     <div class="kpi"><div class="lab">Gewinn / Verlust</div><div class="val" id="k-pl">–</div><div class="sub" id="k-plpct">–</div></div>
@@ -257,6 +266,7 @@ footer{font-size:12.5px;color:var(--muted);max-width:80ch}
   <!-- Mappe -->
   <section id="v-mappe">
     <div style="display:flex;flex-direction:column;gap:12px">
+      <details class="panel wv" id="wv"><summary><span><b>Wertentwicklung der Mappe</b></span><span class="num" id="wv-sum">–</span></summary><div id="wv-body"></div></details>
       <div class="binder-bar">
         <div class="seg" role="group" aria-label="Ordnung" id="m-order">
           <button type="button" data-o="album" aria-pressed="true">Wie eingeklebt</button>
@@ -267,6 +277,24 @@ footer{font-size:12.5px;color:var(--muted);max-width:80ch}
         <div class="pager"><button type="button" id="pg-prev" aria-label="Vorige Seite">‹</button><span class="num muted" id="pg-info">–</span><button type="button" id="pg-next" aria-label="Nächste Seite">›</button></div>
       </div>
       <div class="binder" id="binder"><div class="loading">Mappe wird geladen …</div></div>
+    </div>
+  </section>
+
+  <!-- Verkaufsbuch -->
+  <section id="v-verkauf" hidden>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="binder-bar">
+        <select class="field" id="vb-month" style="max-width:240px" aria-label="Zeitraum"></select>
+        <div class="acts"><button type="button" class="btn primary" id="vb-add">Verkauf eintragen</button><button type="button" class="btn" id="vb-csv">Als CSV</button></div>
+      </div>
+      <section class="kpis" aria-label="Verkäufe">
+        <div class="kpi"><div class="lab">Umsatz</div><div class="val" id="vb-rev">–</div><div class="sub" id="vb-n">–</div></div>
+        <div class="kpi"><div class="lab">Gewinn</div><div class="val" id="vb-pl">–</div><div class="sub" id="vb-plsub">–</div></div>
+        <div class="kpi"><div class="lab">Kosten</div><div class="val" id="vb-cost">–</div><div class="sub">Einkauf, Gebühren, Versand</div></div>
+        <div class="kpi"><div class="lab">Ggü. Marktwert</div><div class="val" id="vb-mk">–</div><div class="sub">Verkaufspreis zum Wert am Verkaufstag</div></div>
+      </section>
+      <div class="list" id="vb-rows"></div>
+      <p class="note">Verkäufe trägst du in der Mappe ein: Karte antippen, „Als verkauft eintragen“. Die Menge in der Mappe sinkt dann automatisch. Gewinn = Verkaufspreis − Einkauf − Gebühren − Versand, den du selbst trägst. Ohne Einkaufspreis zählt ein Verkauf nur zum Umsatz.</p>
     </div>
   </section>
 
@@ -303,7 +331,7 @@ Surging Sparks Booster Box;;;2;165;;Versiegelt</pre>
       </div>
       <div class="panel">
         <h2>Sicherung</h2>
-        <p>Deine Mappe liegt nur auf diesem Gerät, in diesem Browser. Sichere sie regelmäßig. Die Sicherungsdatei enthält alle Karten, Einkaufspreise und Notizen, die Fotos nicht. Sie lässt sich hier oder auf einem anderen Gerät wieder einspielen.</p>
+        <p>Deine Mappe liegt nur auf diesem Gerät, in diesem Browser. Sichere sie regelmäßig. Die Sicherungsdatei enthält alle Karten, Einkaufspreise, Notizen und das Verkaufsbuch, die Fotos nicht. Sie lässt sich hier oder auf einem anderen Gerät wieder einspielen.</p>
         <div class="acts">
           <button type="button" class="btn" id="bk-save">Sicherung herunterladen</button>
           <label class="btn" for="bk-file">Sicherung einspielen</label><input type="file" id="bk-file" accept=".json" hidden>
@@ -423,19 +451,23 @@ function historySync(id){ const n=META?.shards||128; const p=SH.get(id%n); if(!p
 
 /* ================= Speicher (IndexedDB + localStorage-Spiegel) ================= */
 const DEFAULT_SETTINGS={margin:-5,th:10,de:0,jp:0,basis:'market'};
-let ST={positions:[],settings:{...DEFAULT_SETTINGS}};
+let ST={positions:[],sales:[],settings:{...DEFAULT_SETTINGS}};
 const LS='preisradar-mappe-v1';
 let idb=null;
 function openDB(){ return new Promise(res=>{ try{ const q=indexedDB.open('preisradar',1); q.onupgradeneeded=()=>{ q.result.createObjectStore('kv'); q.result.createObjectStore('photos'); }; q.onsuccess=()=>res(q.result); q.onerror=()=>res(null); }catch(e){ res(null); } }); }
 function idbGet(store,key){ return new Promise(res=>{ if(!idb) return res(null); try{ const t=idb.transaction(store).objectStore(store).get(key); t.onsuccess=()=>res(t.result??null); t.onerror=()=>res(null);}catch(e){res(null);} }); }
 function idbPut(store,key,val){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).put(val,key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
 function idbDel(store,key){ return new Promise(res=>{ if(!idb) return res(false); try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
-function normState(s){ const st={savedAt:s?.savedAt||0, positions:Array.isArray(s?.positions)?s.positions:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; if(!st.settings.v3){ st.settings.basis='market'; st.settings.v3=true; } return st; }
+function normState(s){ const st={savedAt:s?.savedAt||0, positions:Array.isArray(s?.positions)?s.positions:[], sales:Array.isArray(s?.sales)?s.sales:[], settings:{...DEFAULT_SETTINGS,...(s?.settings||{})}}; if(!st.settings.v3){ st.settings.basis='market'; st.settings.v3=true; } return st; }
 let saveT=null;
 async function saveNow(){ clearTimeout(saveT); saveT=null; ST.savedAt=Date.now(); const json=JSON.parse(JSON.stringify(ST)); try{ localStorage.setItem(LS,JSON.stringify(json)); }catch(e){} await idbPut('kv','state',json); }
 function save(){ clearTimeout(saveT); saveT=setTimeout(saveNow,300); }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'&&saveT) saveNow(); });
 window.addEventListener('pagehide',()=>{ if(saveT) saveNow(); });
+/* Zweites offenes Fenster: dessen Speicherstand übernehmen, damit sich die Fenster nicht gegenseitig überschreiben */
+window.addEventListener('storage',e=>{ if(e.key!==LS||!e.newValue||saveT) return; let s; try{ s=JSON.parse(e.newValue); }catch(_){ return; }
+  if((s?.savedAt||0)<=(ST.savedAt||0)) return; ST=normState(s); if($('modal').innerHTML) closeModal();
+  loadHistoryFor(ST.positions.map(p=>p.id)).then(()=>{ if(CAT) renderAll(); }); toast('In einem anderen Fenster geändert – übernommen'); });
 async function initStore(){
   idb=await openDB();
   let s=await idbGet('kv','state'), l=null;
@@ -452,7 +484,11 @@ async function preloadPhotos(){ await Promise.all(ST.positions.filter(p=>p.photo
 /* ================= Kennzahlen ================= */
 function langFactor(l){ const s=ST.settings; if(l==='DE') return 1-s.de/100; if(l==='EN') return 1; return 1-s.jp/100; }
 const unitValue=(r,p)=>basePrice(r,p.rh)*langFactor(p.lang);
-function metrics(r){
+function metrics(r,rh=false){
+  if(rh){ const rp=priceOf(r,true), np=priceOf(r,false);
+    if(rp!==np){ const a=r[F.a30h]||null, d30=a?rp/a-1:null, sig=[], th=ST.settings.th/100;
+      if(rp>=2&&a){ const dev=rp/a-1; if(dev>=th) sig.push({c:'p-up',t:pct(dev)+' über Ø30'}); else if(dev<=-th) sig.push({c:'p-down',t:pct(dev)+' unter Ø30'}); }
+      return {h:{dates:[],vals:[]},trend:rp,d7:null,d7src:null,d30,d30src:d30!=null?'Ø30':null,max:null,maxI:-1,sig,rh:true}; } }
   const h=historySync(r[F.id])||{dates:[],vals:[]}, v=h.vals, n=v.length, trend=priceOf(r,false), low=basis()!=='trend', mk=basis()==='market';
   const back=k=>{ if(n<2) return null; const target=new Date(h.dates[n-1]); target.setUTCDate(target.getUTCDate()-k); const t=target.toISOString().slice(0,10);
     for(let i=n-1;i>=0;i--) if(h.dates[i]<=t) return v[i]; return null; };
@@ -474,16 +510,21 @@ const sellPrice=u=>{ const v=u*(1+ST.settings.margin/100); return v<20?Math.roun
 function niceTicks(mn,mx,c=4){ const span=mx-mn||Math.max(1,mx*0.1), raw=span/c, mag=Math.pow(10,Math.floor(Math.log10(raw))); const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=raw);
   const lo=Math.floor(mn/step)*step, hi=Math.ceil(mx/step)*step, t=[]; for(let x=lo;x<=hi+step/2;x+=step) t.push(+x.toFixed(6)); if(t.length<2) t.push(+(lo+step).toFixed(6)); return t; }
 const CH={W:440,H:220,L:52,R:10,T:16,B:26};
-function chartSVG(h,range){
-  const v=h.vals.slice(-range), ds=h.dates.slice(-range), {W,H,L,R,T,B}=CH;
+const DAY=d=>Date.parse(d+'T00:00:00Z')/864e5;
+/* Punkte im Zeitraum (Kalendertage, nicht Anzahl Messpunkte); x nach Datum, Lücken bleiben sichtbar */
+function chartPts(h,range){ const n=h.vals.length; if(!n) return {v:[],ds:[],o:[],span:0}; const end=DAY(h.dates[n-1]), v=[],ds=[],o=[];
+  for(let i=0;i<n;i++){ const d=DAY(h.dates[i]); if(end-d<range){ v.push(h.vals[i]); ds.push(h.dates[i]); o.push(d); } }
+  const t0=o[0]; return {v,ds,o:o.map(x=>x-t0),span:o[o.length-1]-t0}; }
+function chartSVG(h,range,id='cv'){
+  const {v,ds,o,span}=chartPts(h,range), {W,H,L,R,T,B}=CH;
   const mx0=Math.max(...v), mn0=Math.min(...v), ticks=niceTicks(mn0*0.97,mx0*1.03), lo=ticks[0], hi=ticks[ticks.length-1];
-  const x=i=>L+(v.length>1?i/(v.length-1):0.5)*(W-L-R), y=val=>T+(1-(val-lo)/((hi-lo)||1))*(H-T-B);
+  const x=i=>L+(span>0?o[i]/span:0.5)*(W-L-R), y=val=>T+(1-(val-lo)/((hi-lo)||1))*(H-T-B);
   const line=v.map((val,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(val).toFixed(1)).join('');
   const area=line+`L${x(v.length-1).toFixed(1)} ${H-B}L${x(0).toFixed(1)} ${H-B}Z`;
   const mxI=v.indexOf(mx0), mnI=v.indexOf(mn0), step=Math.max(1,Math.round(v.length/4.5)), xl=[]; for(let i=v.length-1;i>=0;i-=step) xl.push(i);
   const fmt=t=>t>=1000?(t/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' T€':t.toLocaleString('de-DE')+' €';
   const lbl=(i,val,txt,col,above)=>{ const px=x(i),py=y(val),a=px>W-90?'end':px<L+50?'start':'middle'; return `<circle cx="${px}" cy="${py}" r="4" fill="${col}" stroke="var(--surface)" stroke-width="2"/><text x="${px}" y="${py+(above?-9:17)}" text-anchor="${a}" font-size="11.5" fill="${col}" font-family="IBM Plex Mono, monospace">${txt} ${eur0.format(val)}</text>`; };
-  return `<svg viewBox="0 0 ${W} ${H}" id="cv" role="img" aria-label="Preisverlauf">
+  return `<svg viewBox="0 0 ${W} ${H}" id="${id}" role="img" aria-label="Preisverlauf">
     ${ticks.map(t=>`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${fmt(t)}</text>`).join('')}
     ${xl.map(i=>`<text x="${x(i)}" y="${H-8}" text-anchor="${i===v.length-1?'end':i===0?'start':'middle'}" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${dShort(ds[i])}</text>`).join('')}
     <path d="${area}" fill="var(--chart-fill)"/><path d="${line}" fill="none" stroke="var(--chart)" stroke-width="2" stroke-linejoin="round"/>
@@ -493,13 +534,13 @@ function chartSVG(h,range){
     <g class="hov" visibility="hidden"><line class="hl" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="3 3"/><circle class="hc" r="4" fill="var(--chart)"/><rect class="hb" height="22" rx="5" fill="var(--fg)"/><text class="ht" font-size="11.5" fill="var(--bg)" font-family="IBM Plex Mono, monospace"></text></g>
     <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent"/></svg>`;
 }
-function bindChart(h,range){
-  const svg=$('cv'); if(!svg) return; const v=h.vals.slice(-range), ds=h.dates.slice(-range), {W,H,L,R,T,B}=CH;
+function bindChart(h,range,id='cv'){
+  const svg=$(id); if(!svg) return; const {v,ds,o,span}=chartPts(h,range), {W,H,L,R,T,B}=CH;
   const ticks=niceTicks(Math.min(...v)*0.97,Math.max(...v)*1.03), lo=ticks[0], hi=ticks[ticks.length-1];
-  const x=i=>L+(v.length>1?i/(v.length-1):0.5)*(W-L-R), y=val=>T+(1-(val-lo)/((hi-lo)||1))*(H-T-B);
+  const x=i=>L+(span>0?o[i]/span:0.5)*(W-L-R), y=val=>T+(1-(val-lo)/((hi-lo)||1))*(H-T-B);
   const g=svg.querySelector('.hov'),hl=svg.querySelector('.hl'),hc=svg.querySelector('.hc'),hb=svg.querySelector('.hb'),ht=svg.querySelector('.ht');
   const mv=ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const p=pt.matrixTransform(svg.getScreenCTM().inverse());
-    const i=Math.max(0,Math.min(v.length-1,Math.round((p.x-L)/(W-L-R)*(v.length-1)))), px=x(i), py=y(v[i]);
+    const day=(p.x-L)/(W-L-R)*span; let i=0; for(let j=1;j<o.length;j++) if(Math.abs(o[j]-day)<Math.abs(o[i]-day)) i=j; const px=x(i), py=y(v[i]);
     hl.setAttribute('x1',px);hl.setAttribute('x2',px);hc.setAttribute('cx',px);hc.setAttribute('cy',py);ht.textContent=dLong(ds[i])+'  '+eur.format(v[i]);
     const tw=ht.getComputedTextLength()+14; let bx=px+10; if(bx+tw>W-R) bx=px-10-tw; hb.setAttribute('x',bx);hb.setAttribute('y',T);hb.setAttribute('width',tw);ht.setAttribute('x',bx+7);ht.setAttribute('y',T+15);g.setAttribute('visibility','visible'); };
   svg.addEventListener('pointermove',mv); svg.addEventListener('pointerdown',mv); svg.addEventListener('pointerleave',()=>g.setAttribute('visibility','hidden'));
@@ -507,8 +548,8 @@ function bindChart(h,range){
 
 /* ================= Ansichten ================= */
 const UI={view:'mappe',order:'album',page:0,lq:'',lsort:'value',fresh:null};
-function setView(v){ UI.view=v; document.querySelectorAll('nav.views button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v)); for(const x of ['mappe','liste','import','settings']) $('v-'+x).hidden=x!==v; }
-function rowsData(){ return ST.positions.map(p=>{ const r=prod(p.id); if(!r) return {p,r:null}; const unit=unitValue(r,p), m=metrics(r);
+function setView(v){ UI.view=v; document.querySelectorAll('nav.views button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v)); for(const x of ['mappe','verkauf','liste','import','settings']) $('v-'+x).hidden=x!==v; $('kpis').hidden=v==='verkauf'; }
+function rowsData(){ return ST.positions.map(p=>{ const r=prod(p.id); if(!r) return {p,r:null}; const unit=unitValue(r,p), m=metrics(r,p.rh);
   return {p,r,unit,val:unit*p.qty,cost:p.cost!=null?p.cost*p.qty:null,m}; }); }
 function renderKpis(list){
   let val=0,cost=0,cv=0,n=0,sig=0; for(const x of list){ if(!x.r) continue; val+=x.val; n+=x.p.qty; if(x.cost!=null){cost+=x.cost;cv+=x.val;} if(x.m.sig.length) sig++; }
@@ -566,7 +607,104 @@ function renderList(){
 function renderSettings(){ const s=ST.settings, sg=v=>(v>0?'+':v<0?'−':'±')+Math.abs(v)+' %';
   $('s-margin').value=s.margin;$('s-th').value=s.th;$('s-de').value=s.de;$('s-jp').value=s.jp;
   $('s-margin-v').textContent=sg(s.margin);$('s-th-v').textContent=s.th+' %';$('s-de-v').textContent='−'+s.de+' %';$('s-jp-v').textContent='−'+s.jp+' %'; }
-function renderAll(){ document.querySelectorAll('#m-basis button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.b===basis())); renderBinder(); renderList(); renderSettings(); }
+function renderAll(){ document.querySelectorAll('#m-basis button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.b===basis())); renderBinder(); renderWert(); renderList(); renderSales(); renderSettings(); }
+
+/* ================= Wertentwicklung der Mappe ================= */
+/* Wert des heutigen Mappeninhalts an jedem gespeicherten Tag (fehlende Tage: letzter bekannter Preis) */
+function portfolioHistory(){
+  if(!CAT||!META?.days?.length||!ST.positions.length) return null;
+  const days=META.days, tot=new Array(days.length).fill(0); let any=false;
+  for(const p of ST.positions){ const r=prod(p.id); if(!r) continue; const h=historySync(r[F.id]); if(!h) return null;
+    const np=priceOf(r,false), ratio=np>0?basePrice(r,p.rh)/np:1, f=langFactor(p.lang)*p.qty*ratio, map=new Map(h.dates.map((d,i)=>[d,h.vals[i]]));
+    let last=h.vals.length?h.vals[0]:np; if(h.vals.length) any=true;
+    days.forEach((d,i)=>{ if(map.has(d)) last=map.get(d); tot[i]+=last*f; }); }
+  return any?{dates:days.slice(),vals:tot.map(x=>Math.round(x*100)/100)}:null;
+}
+UI.wrange=30;
+function renderWert(){
+  const el=$('wv-body'); if(!el) return; const h=portfolioHistory();
+  if(!h||h.vals.length<2){ $('wv-sum').textContent=ST.positions.length?'ab dem zweiten Tag':'–'; el.innerHTML='<div class="note">Erscheint, sobald Karten in der Mappe sind und mindestens zwei Tage Preise vorliegen.</div>'; return; }
+  const {v}=chartPts(h,UI.wrange), chg=v.length>1&&v[0]>0?v[v.length-1]/v[0]-1:null, lbl=UI.wrange===7?'7 Tagen':UI.wrange===30?'30 Tagen':'seit '+dShort(h.dates[0]);
+  $('wv-sum').innerHTML=chg!=null?`<span class="${cls(chg)}">${pct(chg)}</span> <span class="muted">in ${lbl}</span>`:'–';
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="num">${eur0.format(v[v.length-1])} <span class="muted">heute</span>${chg!=null?` · <span class="${cls(chg)}">${v[v.length-1]-v[0]>=0?'+':'−'}${eur0.format(Math.abs(v[v.length-1]-v[0]))}</span>`:''}</span>
+    <div class="toggle" id="wv-rng"><button type="button" data-r="7" aria-pressed="${UI.wrange===7}">7 T</button><button type="button" data-r="30" aria-pressed="${UI.wrange===30}">30 T</button><button type="button" data-r="9999" aria-pressed="${UI.wrange===9999}">Alles</button></div></div>
+    <div class="chartbox">${chartSVG(h,UI.wrange,'cvw')}</div>
+    <div class="note">Wert der Karten, die heute in der Mappe sind, zu den Preisen des jeweiligen Tages (${basis()==='low'?'günstigstes Angebot':basis()==='trend'?'Trend':'Marktpreis'}, mit Sprachabschlag). Neu eingeklebte Karten zählen rückwirkend mit, verkaufte nicht mehr.</div>`;
+  bindChart(h,UI.wrange,'cvw');
+  $('wv-rng').querySelectorAll('button').forEach(b=>b.onclick=()=>{ UI.wrange=+b.dataset.r; renderWert(); });
+}
+
+/* ================= Verkaufsbuch ================= */
+const PLATFORMS=['Vinted','Kleinanzeigen','Cardmarket','eBay','Sonstiges'];
+const localDay=()=>{ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); };
+const monthName=m=>new Date(m+'-15T12:00:00').toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+function saleCalc(s){ const costs=(s.fees||0)+(s.ship||0), ek=s.cost!=null?s.cost*s.qty:null; return {costs,ek,pl:ek!=null?s.price-costs-ek:null}; }
+function saleForm(s){ const n=v=>v==null?'':v; return `<div class="form">
+  <label>Menge${s.max?` (max. ${s.max})`:''}<input class="field" id="sf-qty" type="number" min="1"${s.max?` max="${s.max}"`:''} step="1" value="${s.qty}"></label>
+  <label>Verkaufspreis gesamt (€)<input class="field" id="sf-price" type="number" min="0" step="0.01" inputmode="decimal" value="${n(s.price)}"></label>
+  <label>Plattform<select class="field" id="sf-plat">${PLATFORMS.map(x=>`<option${x===s.platform?' selected':''}>${x}</option>`).join('')}</select></label>
+  <label>Datum<input class="field" id="sf-date" type="date" value="${esc(s.date)}"></label>
+  <label>Gebühren (€)<input class="field" id="sf-fees" type="number" min="0" step="0.01" inputmode="decimal" value="${s.fees||''}" placeholder="0"></label>
+  <label>Versand, den du trägst (€)<input class="field" id="sf-ship" type="number" min="0" step="0.01" inputmode="decimal" value="${s.ship||''}" placeholder="0"></label>
+  <label>Einkauf je Stück (€)<input class="field" id="sf-cost" type="number" min="0" step="0.01" inputmode="decimal" value="${n(s.cost)}" placeholder="unbekannt"></label>
+  <label>Notiz<input class="field" id="sf-note" type="text" value="${esc(s.note||'')}" placeholder="z. B. Käufer, Bündel"></label></div>
+  <div class="box" id="sf-sum" style="margin-top:10px"></div>`; }
+function readSale(max){ const n=id=>{ const v=$(id).value.trim().replace(',','.'); return v===''?null:Math.max(0,parseFloat(v)||0); };
+  let qty=Math.max(1,parseInt($('sf-qty').value,10)||1); if(max) qty=Math.min(qty,max);
+  return {qty, price:n('sf-price')??0, platform:$('sf-plat').value, date:/^\d{4}-\d\d-\d\d$/.test($('sf-date').value)?$('sf-date').value:localDay(), fees:n('sf-fees')||0, ship:n('sf-ship')||0, cost:n('sf-cost'), note:$('sf-note').value.trim()}; }
+function bindSaleSum(max,mkt){ const upd=()=>{ const s=readSale(max), c=saleCalc(s), mk=mkt?s.price/(mkt*s.qty)-1:null;
+    $('sf-sum').innerHTML=`<div class="line"><span>Erlös nach Gebühren und Versand</span><span class="num">${eur.format(s.price-c.costs)}</span></div>
+      <div class="line"><span>Gewinn</span><span class="num ${cls(c.pl)}">${c.pl!=null?(c.pl>=0?'+':'−')+eur.format(Math.abs(c.pl)):'– (Einkauf fehlt)'}</span></div>
+      ${mk!=null?`<div class="line"><span>Ggü. Marktwert (${eur.format(mkt*s.qty)})</span><span class="num ${cls(mk)}">${pct(mk)}</span></div>`:''}`; };
+  ['sf-qty','sf-price','sf-fees','sf-ship','sf-cost'].forEach(id=>$(id).addEventListener('input',upd)); upd(); }
+function openSale(r,p){
+  const unit=p?unitValue(r,p):priceOf(r,false), max=p?p.qty:null;
+  openModal(`<div class="addwrap"><div><h2>Verkauf eintragen</h2><div class="meta">${esc(pName(r))} · ${pSub(r)}${p?` · ${p.qty}× in der Mappe`:' · nicht in der Mappe'}</div></div>
+    ${saleForm({qty:1,max,price:sellPrice(unit),platform:'Vinted',date:localDay(),fees:0,ship:0,cost:p?.cost??null,note:''})}
+    <div class="acts"><button type="button" class="btn primary" id="sf-go">Verkauf speichern</button></div>
+    ${p?`<div class="note">Die Menge in der Mappe sinkt um die verkaufte Menge. Ist alles verkauft, verschwindet die Karte aus der Mappe.</div>`:''}</div>`);
+  let touched=false; $('sf-price').addEventListener('input',()=>touched=true);
+  $('sf-qty').addEventListener('input',()=>{ if(!touched){ const q=Math.max(1,Math.min(max||999,parseInt($('sf-qty').value,10)||1)); $('sf-price').value=sellPrice(unit*q); } });
+  bindSaleSum(max,unit);
+  $('sf-go').onclick=()=>{ const s=readSale(max);
+    ST.sales.push({k:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,4), id:r[F.id], name:pName(r), set:pSet(r), nr:String(r[F.nr]||''), lang:p?.lang||'DE', cond:p?.cond||(isSingle(r)?'NM':'Versiegelt'), rh:!!p?.rh, mkt:Math.round(unit*100)/100, ...s});
+    if(p){ p.qty-=s.qty; if(p.qty<=0){ ST.positions=ST.positions.filter(x=>x.k!==p.k); if(p.photo) idbDel('photos',p.photo); } }
+    UI.month='all'; save(); closeModal(); setView('verkauf'); renderAll(); toast(`Verkauf gespeichert: ${pName(r)}`); };
+}
+function editSale(k){
+  const s=ST.sales.find(x=>x.k===k); if(!s) return; const r=prod(s.id);
+  openModal(`<div class="addwrap"><div><h2>Verkauf bearbeiten</h2><div class="meta">${esc(s.name)} · ${esc(s.set)}${s.nr?' · #'+esc(s.nr):''} · ${esc(s.lang)}</div></div>
+    ${saleForm(s)}
+    <div class="acts"><button type="button" class="btn primary" id="sf-go">Speichern</button>${r?`<a class="btn" href="${cmUrl(r,'DE')}" target="_blank" rel="noopener">Cardmarket ↗</a>`:''}<button type="button" class="btn danger" id="sf-del">Verkauf löschen</button></div>
+    <div class="note">Löschen entfernt nur den Eintrag im Verkaufsbuch. Die Karte kommt nicht automatisch zurück in die Mappe.</div></div>`);
+  bindSaleSum(null,s.mkt||null);
+  $('sf-go').onclick=()=>{ Object.assign(s,readSale(null)); save(); closeModal(); renderAll(); toast('Gespeichert'); };
+  $('sf-del').onclick=()=>{ const b=$('sf-del'); if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent='Wirklich löschen?'; return; }
+    ST.sales=ST.sales.filter(x=>x.k!==k); save(); closeModal(); renderAll(); toast('Verkauf gelöscht'); };
+}
+UI.month='all';
+function renderSales(){
+  const months=[...new Set(ST.sales.map(s=>s.date.slice(0,7)))].sort().reverse(); if(UI.month!=='all'&&!months.includes(UI.month)) UI.month='all';
+  $('vb-month').innerHTML='<option value="all">Alle Monate</option>'+months.map(m=>`<option value="${m}"${m===UI.month?' selected':''}>${monthName(m)}</option>`).join('');
+  const L=ST.sales.filter(s=>UI.month==='all'||s.date.startsWith(UI.month)).sort((a,b)=>b.date.localeCompare(a.date)||b.k.localeCompare(a.k));
+  let rev=0,costs=0,pl=0,known=0,mkS=0,mkV=0,n=0; for(const s of L){ const c=saleCalc(s); rev+=s.price; n+=s.qty; costs+=c.costs+(c.ek||0); if(c.pl!=null){ pl+=c.pl; known++; } if(s.mkt>0){ mkS+=s.price; mkV+=s.mkt*s.qty; } }
+  $('vb-rev').textContent=L.length?eur.format(rev):'–'; $('vb-n').textContent=L.length?`${n} Stück · ${L.length} ${L.length===1?'Verkauf':'Verkäufe'}`:'noch keine Verkäufe';
+  const k=$('vb-pl'); k.textContent=known?(pl>=0?'+':'−')+eur.format(Math.abs(pl)):'–'; k.className='val '+(known?cls(pl):'');
+  $('vb-plsub').textContent=!L.length?'–':known===L.length?'alle Verkäufe mit Einkaufspreis':`${known} von ${L.length} Verkäufen mit Einkaufspreis`;
+  $('vb-cost').textContent=L.length?eur.format(costs):'–';
+  const mk=mkV>0?mkS/mkV-1:null, e=$('vb-mk'); e.textContent=mk!=null?pct(mk):'–'; e.className='val '+(mk!=null?cls(mk):'');
+  $('vb-rows').innerHTML=L.length?L.map(s=>{ const r=prod(s.id), c=saleCalc(s);
+    return `<button type="button" class="lrow" data-s="${esc(s.k)}"><div class="th">${r?cardImg(r,'low'):''}</div>
+      <div class="nm"><div class="t">${esc(s.name)}</div><div class="s">${dLong(s.date)} · ${esc(s.platform)} <span class="tag">${esc(s.lang)}</span>${s.note?' · '+esc(s.note):''}</div></div>
+      <div class="r c-chg"><span class="pr ${cls(c.pl)}">${c.pl!=null?(c.pl>=0?'+':'−')+eur.format(Math.abs(c.pl)):'–'}</span><div class="muted" style="font-size:11px">Gewinn</div></div>
+      <div class="r c-qty pr">${s.qty}×</div>
+      <div class="r"><div class="pr">${eur.format(s.price)}</div>${c.pl!=null?`<div class="pr ${cls(c.pl)} only-m" style="font-size:12px">${c.pl>=0?'+':'−'}${eur.format(Math.abs(c.pl))}</div>`:''}</div></button>`; }).join('')
+    : '<div class="loading">Noch keine Verkäufe. In der Mappe eine Karte antippen und „Als verkauft eintragen“ wählen.</div>';
+}
+function salesCSV(){ const q=s=>{ s=String(s??''); return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }, d=v=>v==null?'':(+v).toFixed(2).replace('.',',');
+  const L=['Datum;Plattform;Cardmarket-ID;Name;Set;Nummer;Sprache;Zustand;Menge;Verkaufspreis;Gebühren;Versand;Einkauf je Stück;Gewinn;Marktwert je Stück;Notiz'];
+  for(const s of [...ST.sales].sort((a,b)=>a.date.localeCompare(b.date))){ const c=saleCalc(s); L.push([s.date,s.platform,s.id,s.name,s.set,s.nr,s.lang,s.cond,s.qty,d(s.price),d(s.fees),d(s.ship),d(s.cost),d(c.pl),d(s.mkt),s.note].map(q).join(';')); }
+  return '\ufeff'+L.join('\r\n'); }
 
 /* ================= Detail ================= */
 const posBy=k=>ST.positions.find(p=>p.k===k)||null;
@@ -587,7 +725,7 @@ function factsHTML(r){ const na='<span class="flat">–</span>', f=(k,v)=>`<div 
     ${f('Ø 7 Tage',r[F.avg7]!=null?eur.format(r[F.avg7]):na)}${f('Ø 30 Tage',r[F.avg30]!=null?eur.format(r[F.avg30]):na)}${f('Reverse ab',r[F.lh]>0?eur.format(r[F.lh]):na)}${f('Reverse Trend',r[F.th]>0?eur.format(r[F.th]):na)}${f('Ø 1 Tag',r[F.avg1]!=null?eur.format(r[F.avg1]):na)}</div>`; }
 function chartHTML(h){
   if(h.vals.length>=2) return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="font-size:15px">Preisverlauf</h3>
-    <div class="toggle" id="rng"><button type="button" data-r="7" aria-pressed="${UI.range===7}">7 T</button><button type="button" data-r="30" aria-pressed="${UI.range===30}">30 T</button><button type="button" data-r="365" aria-pressed="${UI.range===365}">Alles</button></div></div>
+    <div class="toggle" id="rng"><button type="button" data-r="7" aria-pressed="${UI.range===7}">7 T</button><button type="button" data-r="30" aria-pressed="${UI.range===30}">30 T</button><button type="button" data-r="9999" aria-pressed="${UI.range===9999}">Alles</button></div></div>
     <div class="chartbox">${chartSVG(h,UI.range)}</div><div class="note">${basis()==='low'?'Günstigstes Angebot auf Cardmarket':basis()==='trend'?'Cardmarket-Trend':'Marktpreis (Ø Verkauf 7 Tage)'}, täglich gegen 3 Uhr festgehalten, seit ${dLong(h.dates[0])}.</div>`;
   return `<div class="box"><h3>Preisverlauf</h3><div class="note">Der tägliche Verlauf wird seit ${META?dLong(META.days[0]):'heute'} aufgezeichnet und erscheint hier ab dem zweiten Tag. Bis dahin geben die Cardmarket-Durchschnitte darunter (Ø 7 und Ø 30 Tage Verkauf) eine Orientierung.</div></div>`;
 }
@@ -595,7 +733,7 @@ UI.range=30;
 async function openDetail(k){
   const p=posBy(k); if(!p) return; const r=prod(p.id);
   if(!r){ openModal(`<div class="addwrap"><h2>Produkt ${esc(p.id)}</h2><p>Dieses Produkt ist nicht mehr im Cardmarket-Katalog.</p><div class="acts"><button class="btn danger" id="d-del">Aus der Mappe entfernen</button></div></div>`); $('d-del').onclick=()=>removePos(p); return; }
-  const h=await historyAsync(r[F.id]); const m=metrics(r); const unit=unitValue(r,p), lf=langFactor(p.lang);
+  const h=await historyAsync(r[F.id]); const m=metrics(r,p.rh); const unit=unitValue(r,p), lf=langFactor(p.lang);
   const photo=p.photo?await photoURL(p.photo):null; let showPhoto=!r[F.img]&&!!photo;
   const gv=p.cost!=null?(()=>{ const cost=p.cost*p.qty, v=unit*p.qty, pl=v-cost; return `<div class="line"><span>Gewinn / Verlust</span><span class="num ${cls(pl)}">${pl>=0?'+':'−'}${eur.format(Math.abs(pl))} ${cost>0?' ('+pct(pl/cost)+')':''}</span></div>`; })():'';
   const html=`<div class="dgrid">
@@ -603,21 +741,22 @@ async function openDetail(k){
       ${photo&&r[F.img]?`<div class="toggle" id="d-pt"><button type="button" data-p="0" aria-pressed="true">Offizielles Bild</button><button type="button" data-p="1" aria-pressed="false">Dein Foto</button></div>`:''}</div>
     <div class="dinfo">
       <div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''} · ${esc(pType(r))}</div></div>
-      <div class="big"><span class="pr">${eur.format(m.trend)}</span><span class="muted" style="font-size:13px">${BASIS_LABEL(r)}</span>${m.sig.map(s=>`<span class="pill ${s.c}">${s.t}</span>`).join('')}</div>
-      <div class="note" style="margin-top:-8px;font-size:13px">${[basis()!=='low'&&r[F.low]!=null?'Günstigstes Angebot '+eur.format(r[F.low]):'', basis()!=='market'&&isSingle(r)&&r[F.avg7]!=null?'Marktpreis '+eur.format(r[F.avg7]):'', basis()!=='trend'&&r[F.trend]!=null&&(basis()!=='market'||(isSingle(r)&&r[F.avg7]!=null))?'Trend '+eur.format(r[F.trend]):''].filter(Boolean).join(' · ')}</div>
+      <div class="big"><span class="pr">${eur.format(m.trend)}</span><span class="muted" style="font-size:13px">${m.rh?(basis()==='low'?'Günstigstes Angebot':'Trend')+' · Reverse Holo':BASIS_LABEL(r)}</span>${m.sig.map(s=>`<span class="pill ${s.c}">${s.t}</span>`).join('')}</div>
+      <div class="note" style="margin-top:-8px;font-size:13px">${m.rh?'Normale Version: ':''}${[basis()==='market'&&m.rh?'Marktpreis '+eur.format(priceOf(r,false,'market')):'',basis()!=='low'&&r[F.low]!=null?'Günstigstes Angebot '+eur.format(r[F.low]):'', basis()!=='market'&&isSingle(r)&&r[F.avg7]!=null?'Marktpreis '+eur.format(r[F.avg7]):'', basis()!=='trend'&&r[F.trend]!=null&&(basis()!=='market'||(isSingle(r)&&r[F.avg7]!=null))?'Trend '+eur.format(r[F.trend]):''].filter(Boolean).join(' · ')}</div>
       <div class="chips">
-        <div class="chip"><span class="k">7 Tage</span><span class="v ${cls(m.d7)}">${m.d7!=null?pct(m.d7):'–'}</span><span class="note">${m.d7src==='Ø7'?'ggü. Ø 7 Tage':m.d7src?'aus Verlauf':'ab 7 Tagen Verlauf'}</span></div>
+        <div class="chip"><span class="k">7 Tage</span><span class="v ${cls(m.d7)}">${m.d7!=null?pct(m.d7):'–'}</span><span class="note">${m.rh?'kein Tagesverlauf für Reverse':m.d7src==='Ø7'?'ggü. Ø 7 Tage':m.d7src?'aus Verlauf':'ab 7 Tagen Verlauf'}</span></div>
         <div class="chip"><span class="k">30 Tage</span><span class="v ${cls(m.d30)}">${m.d30!=null?pct(m.d30):'–'}</span><span class="note">${m.d30src==='Ø30'?'ggü. Ø 30 Tage':m.d30src?'aus Verlauf':''}</span></div>
         <div class="chip"><span class="k">Höchster Wert</span><span class="v">${m.max!=null?eur.format(m.max):'–'}</span><span class="note">${m.maxI>=0?'am '+dShort(m.h.dates[m.maxI]):''}</span></div>
       </div>
-      ${chartHTML(h)}
+      ${chartHTML(h)}${m.rh&&h.vals.length>=2?'<div class="note" style="margin-top:-8px">Der Verlauf zeigt die normale Version. Für Reverse Holo speichert die App nur den aktuellen Preis und den 30-Tage-Schnitt.</div>':''}
       ${factsHTML(r)}
       <div class="box"><h3>In deiner Mappe</h3>
         <div class="line"><span>Menge</span><span class="num">${p.qty}× · ${esc(p.lang)} · ${esc(p.cond)}${p.rh?' · Reverse':''}</span></div>
         <div class="line"><span>Wert je Stück</span><span class="num">${eur.format(unit)}${lf!==1?` <span class="muted">(−${Math.round((1-lf)*100)} % ${esc(p.lang)})</span>`:''}</span></div>
         <div class="line"><span>Wert gesamt</span><span class="num">${eur.format(unit*p.qty)}</span></div>
         ${p.cost!=null?`<div class="line"><span>Einkauf je Stück</span><span class="num">${eur.format(p.cost)}</span></div>`:''}${gv}
-        ${p.note?`<div class="line"><span>Notiz</span><span>${esc(p.note)}</span></div>`:''}</div>
+        ${p.note?`<div class="line"><span>Notiz</span><span>${esc(p.note)}</span></div>`:''}
+        <div class="acts"><button type="button" class="btn" id="d-sold">Als verkauft eintragen</button></div></div>
       <div class="box sell"><h3>Vorschlag Verkaufspreis</h3><div class="line" style="align-items:baseline"><span>${basis()==='low'?'Günstigstes Angebot':basis()==='trend'?'Trend':'Marktpreis'} ${ST.settings.margin>0?'+':ST.settings.margin<0?'−':'±'} ${Math.abs(ST.settings.margin)} %${lf!==1?' mit Sprachabschlag':''}</span><span class="pr">${eur.format(sellPrice(unit))}</span></div></div>
       <details class="box"><summary style="cursor:pointer;font-weight:600">Bearbeiten</summary>${posForm(p,'pe')}
         <div class="acts"><button type="button" class="btn primary" id="d-save">Speichern</button><label class="btn" for="d-photo">${p.photo?'Foto ersetzen':'Foto hinzufügen'}</label><input type="file" id="d-photo" accept="image/*" hidden><button type="button" class="btn danger" id="d-del">Entfernen</button></div></details>
@@ -632,6 +771,7 @@ async function openDetail(k){
   $('d-save').onclick=()=>{ Object.assign(p,readForm('pe')); save(); renderAll(); openDetail(k); toast('Gespeichert'); };
   $('d-photo').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const key=await storePhoto(f, p.photo); p.photo=key; save(); renderAll(); openDetail(k); };
   $('d-del').onclick=()=>removePos(p);
+  $('d-sold').onclick=()=>openSale(r,p);
 }
 function removePos(p){ const b=$('d-del'); if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent='Wirklich entfernen?'; return; }
   ST.positions=ST.positions.filter(x=>x.k!==p.k); if(p.photo) idbDel('photos',p.photo); save(); closeModal(); renderAll(); toast('Aus der Mappe entfernt'); }
@@ -755,8 +895,9 @@ async function recognize(file, onStep){
 }
 
 /* ================= Einkleben ================= */
-function openAdd(){
-  openModal(`<div class="addwrap"><h2>Karte oder Produkt einkleben</h2>
+function openAdd(mode=null){
+  UI.addMode=mode;
+  openModal(`<div class="addwrap"><h2>${mode==='sale'?'Verkauften Artikel finden':'Karte oder Produkt einkleben'}</h2>
     <div class="choice">
       <label for="a-cam"><b>Foto oder Screenshot</b><span>Karte gerade und hell ins Bild, Name oben und Nummer unten müssen lesbar sein. Für Displays, ETBs und Boxen: Foto der Verpackung oder Screenshot der Cardmarket-Seite.</span></label>
       <button type="button" id="a-search-go"><b>Suchen</b><span>Name (deutsch oder englisch), Set oder Nummer, auch für Displays, ETBs und andere versiegelte Produkte.</span></button>
@@ -805,6 +946,7 @@ function showSearch(q,file){
   $('a-cands').onclick=e=>{ const b=e.target.closest('.cand'); if(b) confirmAdd(prod(+b.dataset.id),file); };
 }
 function confirmAdd(r,file){
+  if(UI.addMode==='sale'){ UI.addMode=null; return openSale(r, ST.positions.find(x=>x.id===r[F.id])||null); }
   const body=$('a-body'); const draft={qty:1,cost:null,lang:'DE',cond:isSingle(r)?'NM':'Versiegelt',rh:false,note:''};
   body.innerHTML=`<div class="dgrid" style="padding:0"><div class="dimg"><div class="card">${cardImg(r,'high')}</div></div>
     <div class="dinfo"><div><h2>${esc(pName(r))}</h2><div class="meta">${r[F.de]&&r[F.de]!==r[F.en]?esc(r[F.en])+' · ':''}${pSub(r)}${r[F.rar]?' · '+esc(r[F.rar]):''}</div></div>
@@ -883,6 +1025,10 @@ document.querySelectorAll('nav.views button').forEach(b=>b.onclick=()=>setView(b
 $('fab').onclick=()=>{ if(!CAT) return toast('Preise laden noch …'); openAdd(); };
 $('binder').addEventListener('click',e=>{ const a=e.target.closest('[data-add]'); if(a){ $('fab').click(); return; } const p=e.target.closest('.pocket[data-k]'); if(p) openDetail(p.dataset.k); });
 $('l-rows').addEventListener('click',e=>{ const r=e.target.closest('.lrow'); if(r) openDetail(r.dataset.k); });
+$('vb-rows').addEventListener('click',e=>{ const r=e.target.closest('.lrow'); if(r) editSale(r.dataset.s); });
+$('vb-month').onchange=e=>{ UI.month=e.target.value; renderSales(); };
+$('vb-add').onclick=()=>{ if(!CAT) return toast('Preise laden noch …'); openAdd('sale'); };
+$('vb-csv').onclick=()=>{ if(!ST.sales.length) return toast('Noch keine Verkäufe'); download(`preisradar-verkaeufe-${today()}.csv`, salesCSV(), 'text/csv'); };
 $('pg-prev').onclick=()=>{ UI.page--; renderBinder(); }; $('pg-next').onclick=()=>{ UI.page++; renderBinder(); };
 let tx=null; $('binder').addEventListener('touchstart',e=>{ tx=e.touches[0].clientX; },{passive:true});
 $('binder').addEventListener('touchend',e=>{ if(tx==null) return; const dx=e.changedTouches[0].clientX-tx; tx=null; if(Math.abs(dx)>60){ if(dx<0&&!$('pg-next').disabled) $('pg-next').click(); if(dx>0&&!$('pg-prev').disabled) $('pg-prev').click(); } });
@@ -895,12 +1041,18 @@ $('imp-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; $('i
 $('bk-save').onclick=()=>{ download(`preisradar-sicherung-${today()}.json`, JSON.stringify({app:'preisradar',version:1,saved:new Date().toISOString(),...ST},null,1),'application/json'); toast('Sicherung heruntergeladen'); };
 $('bk-csv').onclick=()=>{ download(`preisradar-mappe-${today()}.csv`, toCSV(), 'text/csv'); };
 $('bk-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; e.target.value=''; try{ const s=JSON.parse(await f.text()); if(s.app!=='preisradar'||!Array.isArray(s.positions)) throw 0;
-  $('bk-confirm').innerHTML=`<div class="notice warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Sicherung mit ${s.positions.length} Karten vom ${dLong(String(s.saved).slice(0,10))} gefunden. <button class="btn" id="bk-merge">Hinzufügen</button><button class="btn danger" id="bk-replace">Mappe ersetzen</button></div>`;
+  $('bk-confirm').innerHTML=`<div class="notice warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Sicherung mit ${s.positions.length} Karten${Array.isArray(s.sales)&&s.sales.length?' und '+s.sales.length+' Verkäufen':''} vom ${dLong(String(s.saved).slice(0,10))} gefunden. <button class="btn" id="bk-merge">Hinzufügen</button><button class="btn danger" id="bk-replace">Mappe ersetzen</button></div>`;
   const clean=async (p,i)=>{ const id=parseInt(p.id,10); if(!id) return null; const key=typeof p.photo==='string'&&/^ph[a-z0-9]+$/.test(p.photo)&&await idbGet('photos',p.photo)?p.photo:null;
     return {k:/^p[a-z0-9]+$/.test(p.k)?p.k:'p'+Date.now().toString(36)+'r'+i, id, qty:Math.max(1,parseInt(p.qty,10)||1), cost:p.cost==null||p.cost===''?null:(Number.isFinite(+p.cost)?Math.max(0,+p.cost):null),
       lang:LANGS.includes(p.lang)?p.lang:'DE', cond:CONDS.includes(p.cond)?p.cond:'NM', rh:!!p.rh, note:String(p.note??'').slice(0,300), added:String(p.added??''), slot:Number.isFinite(+p.slot)?+p.slot:i, photo:key}; };
+  const nn=v=>v==null||v===''||!Number.isFinite(+v)?null:Math.max(0,+v);
+  const cleanSale=(x,i)=>{ const id=parseInt(x?.id,10); if(!id) return null; return {k:/^s[a-z0-9]+$/.test(x.k)?x.k:'s'+Date.now().toString(36)+'r'+i, id, name:String(x.name??'').slice(0,120), set:String(x.set??'').slice(0,120), nr:String(x.nr??'').slice(0,20),
+    lang:LANGS.includes(x.lang)?x.lang:'DE', cond:CONDS.includes(x.cond)?x.cond:'NM', rh:!!x.rh, mkt:nn(x.mkt), qty:Math.max(1,parseInt(x.qty,10)||1), price:nn(x.price)??0, platform:PLATFORMS.includes(x.platform)?x.platform:'Sonstiges',
+    date:/^\d{4}-\d\d-\d\d$/.test(x.date)?x.date:localDay(), fees:nn(x.fees)||0, ship:nn(x.ship)||0, cost:nn(x.cost), note:String(x.note??'').slice(0,300)}; };
   const apply=async rep=>{ const incoming=(await Promise.all(s.positions.map(clean))).filter(Boolean); const ex=new Set(ST.positions.map(p=>p.k));
     ST.positions = rep ? incoming : [...ST.positions, ...incoming.filter(p=>!ex.has(p.k))];
+    const inSales=(Array.isArray(s.sales)?s.sales:[]).map(cleanSale).filter(Boolean), exS=new Set(ST.sales.map(x=>x.k));
+    ST.sales = rep ? inSales : [...ST.sales, ...inSales.filter(x=>!exS.has(x.k))];
     if(rep){ const st=s.settings||{}; ST.settings={...DEFAULT_SETTINGS}; for(const k of ['margin','th','de','jp']) if(Number.isFinite(+st[k])) ST.settings[k]=+st[k]; if(['market','low','trend'].includes(st.basis)) ST.settings.basis=st.basis; ST.settings.v3=true; }
     save(); $('bk-confirm').innerHTML=''; await loadHistoryFor(ST.positions.map(p=>p.id)); renderAll(); toast('Sicherung eingespielt'); };
   $('bk-merge').onclick=()=>apply(false); $('bk-replace').onclick=()=>apply(true);
